@@ -5,7 +5,7 @@
   "permissions": ["scripting", "activeTab"],
   "manifest_version": 3,
   "background": {
-    "service_worker": "src/background/background.js"
+    "service_worker": "src/background.js"
   },
   "content_scripts": [
     // {
