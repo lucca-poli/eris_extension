@@ -13,11 +13,7 @@
       "js": ["src/content/content.js"]
     },
     {
-<<<<<<< HEAD
-      "js": ["src/wa-js.js"],
-=======
       "js": ["src/content/wa-js.js"],
->>>>>>> 5ca7fd0 (Added wa-js file)
       "matches": ["https://web.whatsapp.com/*"],
       "world": "MAIN"
     }
