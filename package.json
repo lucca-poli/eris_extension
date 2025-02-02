@@ -1,0 +1,17 @@
+{
+  "name": "eris_extension",
+  "version": "1.0.0",
+  "description": "A extention that provides a auditable chat in whatsapp web",
+  "main": "index.js",
+  "scripts": {
+    "test": "run"
+  },
+  "author": "Luiz Carlos de Azevedo Santana",
+  "license": "ISC",
+  "dependencies": {
+    "@wppconnect/wa-js": "^3.16.3"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.300"
+  }
+}
