@@ -1,7 +1,4 @@
-// Function to check if the user is logged in
-function isLoggedIn() {
-    return document.getElementById('side') !== null;
-}
+import { functions } from "@wppconnect/wa-js/dist/whatsapp";
 
 // Function to attach event listeners to conversation elements
 function attachConversationListeners() {
@@ -18,19 +15,17 @@ function attachConversationListeners() {
     });
 }
 
-// Main logic
-if (isLoggedIn()) {
-    console.log('User is logged in.');
-    attachConversationListeners();
-} else {
+function waitLogging() {
     console.log('User is not logged in.');
-    // Optionally, you can set up a MutationObserver to detect when the user logs in
-    const observer = new MutationObserver((mutations) => {
-        if (isLoggedIn()) {
+    const observer = new MutationObserver(() => {
+        if (functions.isLoggedIn()) {
             console.log('User has logged in.');
             attachConversationListeners();
-            observer.disconnect(); // Stop observing once the user is logged in
+            observer.disconnect();
         }
     });
     observer.observe(document.body, { childList: true, subtree: true });
 }
+
+waitLogging();
+
