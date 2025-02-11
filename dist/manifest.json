@@ -8,10 +8,10 @@
     "service_worker": "src/background/background.js"
   },
   "content_scripts": [
-    // {
-    //   "matches": ["https://web.whatsapp.com/*"],
-    //   "js": ["src/content/content.js"]
-    // },
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["src/content/content.js"]
+    },
     {
       "js": ["src/content/wa-js.js"],
       "matches": ["https://web.whatsapp.com/*"],
