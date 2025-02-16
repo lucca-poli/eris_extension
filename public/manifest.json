@@ -8,12 +8,12 @@
     "service_worker": "src/background.js"
   },
   "content_scripts": [
-    // {
-    //   "matches": ["https://web.whatsapp.com/*"],
-    //   "js": ["src/content/content.js"]
-    // },
     {
-      "js": ["src/content/wa-js.js"],
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["src/content.js"]
+    },
+    {
+      "js": ["src/wa-js.js"],
       "matches": ["https://web.whatsapp.com/*"],
       "type": "module",
       "world": "MAIN"
