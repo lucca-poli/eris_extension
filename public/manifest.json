@@ -1,0 +1,22 @@
+{
+  "name": "Hello Extensions",
+  "description": "Base Level Extension",
+  "version": "1.0",
+  "permissions": ["scripting", "activeTab"],
+  "manifest_version": 3,
+  "background": {
+    "service_worker": "src/background/background.js"
+  },
+  "content_scripts": [
+    // {
+    //   "matches": ["https://web.whatsapp.com/*"],
+    //   "js": ["src/content/content.js"]
+    // },
+    {
+      "js": ["src/content/wa-js.js"],
+      "matches": ["https://web.whatsapp.com/*"],
+      "type": "module",
+      "world": "MAIN"
+    }
+  ]
+}
