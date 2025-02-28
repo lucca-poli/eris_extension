@@ -1,20 +1,25 @@
-'use strict'
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
 
 /** @type {import('webpack').Configuration} **/
 module.exports = {
     context: path.resolve(__dirname, "src"),
-    devtool: "eval",
+    devtool: "source-map",
     mode: "development",
-    entry: "./content.js",
+    entry: {
+        "wa-js": "./wa-js.js",
+        "content": "./content.js"
+    },
     output: {
         filename: "[name].js",
         path: path.resolve(__dirname, "dist", "js")
     },
     resolve: {
-        extensions: ['js'],
-        preferRelative: true
+        extensions: ['.js'],
+        preferRelative: true,
+        //alias: {
+        //    utils: path.resolve(__dirname, 'src/utils')
+        //}
     },
     watch: true,
     watchOptions: {

@@ -1,4 +1,4 @@
-import { functions } from "@wppconnect/wa-js/dist/whatsapp";
+import WPP from "@wppconnect/wa-js"
 
 // Function to attach event listeners to conversation elements
 function attachConversationListeners() {
@@ -17,8 +17,9 @@ function attachConversationListeners() {
 
 function waitLogging() {
     console.log('User is not logged in.');
+    console.log(WPP.conn.isAuthenticated())
     const observer = new MutationObserver(() => {
-        if (functions.isLoggedIn()) {
+        if (window.WPP.conn.isAuthenticated()) {
             console.log('User has logged in.');
             attachConversationListeners();
             observer.disconnect();

@@ -1,3 +1,4 @@
+console.log("3")
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'conversation_clicked') {
         const { contactName } = message;
