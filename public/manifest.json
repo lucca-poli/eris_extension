@@ -10,13 +10,13 @@
   "content_scripts": [
     {
       "matches": ["https://web.whatsapp.com/*"],
-      "js": ["js/content.js"],
-      "run_at": "document_start"
+      "js": ["js/content.js"]
     },
     {
       "js": ["js/wa-js.js"],
       "matches": ["https://web.whatsapp.com/*"],
-      "world": "MAIN"
+      "world": "MAIN",
+      "run_at": "document_start"
     }
   ],
   "externally_connectable": {

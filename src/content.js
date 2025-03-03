@@ -1,4 +1,39 @@
-import WPP from "@wppconnect/wa-js"
+/**
+ * WA-JS Type Definitions (JSDoc)
+ * @typedef {Object} WPP
+ * @property {Object} webpack - WA-JS initialization utilities
+ * @property {function(function): void} webpack.onReady - Callback when WA-JS is ready
+ * @property {Object} chat - Messaging APIs
+ * @property {function(string, string): Promise<void>} chat.sendTextMessage
+ */
+
+// Communicate with MAIN world script
+//window.postMessage({ type: 'WA_JS_READY_CHECK' }, '*');
+//
+//window.addEventListener('message', async (event) => {
+//    if (event.data.type === 'WA_JS_READY') {
+//        // Use WA-JS APIs
+//        /** @type {WPP} */
+//        const WPP = window.WPP;
+//        //WPP.chat.sendTextMessage('1234567890@c.us', 'Hello from extension!');
+//
+//        try {
+//            const chats = await WPP.chat.list({ count: 20 });
+//            console.log(chats);
+//        } catch (error) {
+//            console.error('Error fetching chats:', error);
+//        }
+//    }
+//});
+
+//window.addEventListener('message', (event) => {
+//  if (event.data.type === 'WA_JS_READY') {
+//    // Use WA-JS APIs
+//    /** @type {WPP} */
+//    const WPP = window.WPP;
+//    WPP.chat.sendTextMessage('1234567890@c.us', 'Hello from extension!');
+//  }
+//});
 
 // Function to attach event listeners to conversation elements
 function attachConversationListeners() {
@@ -28,5 +63,5 @@ function waitLogging() {
     observer.observe(document.body, { childList: true, subtree: true });
 }
 
-waitLogging();
+//waitLogging();
 

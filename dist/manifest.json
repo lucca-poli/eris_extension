@@ -4,19 +4,28 @@
   "version": "1.0",
   "permissions": ["scripting", "activeTab"],
   "manifest_version": 3,
-  "background": {
-    "service_worker": "src/background/background.js"
-  },
+  // "background": {
+  //   "service_worker": "src/background.js"
+  // },
   "content_scripts": [
     {
       "matches": ["https://web.whatsapp.com/*"],
-      "js": ["src/content/content.js"]
+      "js": ["js/content.js"]
     },
     {
-      "js": ["src/content/wa-js.js"],
+      "js": ["js/wa-js.js"],
       "matches": ["https://web.whatsapp.com/*"],
-      "type": "module",
-      "world": "MAIN"
+      "world": "MAIN",
+      "run_at": "document_start"
+    }
+  ],
+  "externally_connectable": {
+    "matches": ["https://web.whatsapp.com/*"]
+  },
+  "web_accessible_resources": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "resources": ["js/wa-js.js", "js/content.js" ]
     }
   ]
 }
