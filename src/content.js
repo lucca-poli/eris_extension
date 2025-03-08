@@ -1,43 +1,13 @@
-/**
- * WA-JS Type Definitions (JSDoc)
- * @typedef {Object} WPP
- * @property {Object} webpack - WA-JS initialization utilities
- * @property {function(function): void} webpack.onReady - Callback when WA-JS is ready
- * @property {Object} chat - Messaging APIs
- * @property {function(string, string): Promise<void>} chat.sendTextMessage
- */
-
 // Communicate with MAIN world script
-//window.postMessage({ type: 'WA_JS_READY_CHECK' }, '*');
-//
-//window.addEventListener('message', async (event) => {
-//    if (event.data.type === 'WA_JS_READY') {
-//        // Use WA-JS APIs
-//        /** @type {WPP} */
-//        const WPP = window.WPP;
-//        //WPP.chat.sendTextMessage('1234567890@c.us', 'Hello from extension!');
-//
-//        try {
-//            const chats = await WPP.chat.list({ count: 20 });
-//            console.log(chats);
-//        } catch (error) {
-//            console.error('Error fetching chats:', error);
-//        }
-//    }
-//});
-
-//window.addEventListener('message', (event) => {
-//  if (event.data.type === 'WA_JS_READY') {
-//    // Use WA-JS APIs
-//    /** @type {WPP} */
-//    const WPP = window.WPP;
-//    WPP.chat.sendTextMessage('1234567890@c.us', 'Hello from extension!');
-//  }
-//});
+window.addEventListener('message', (event) => {
+    if (event.data.type === 'WA_JS_READY') {
+        console.log('WA-JS is ready!');
+    }
+});
 
 // Function to attach event listeners to conversation elements
 function attachConversationListeners() {
-    const conversationElements = document.querySelectorAll('.x1y332i5.x1n2onr6.x6ikm8r.x10wlt62 > *');
+    const conversationElements = document.querySelectorAll('.x11n2onr6.x6ikm8r.x10wlt62 > *');
     conversationElements.forEach((element) => {
         element.addEventListener('click', () => {
             // Extract conversation details (e.g., contact name)
