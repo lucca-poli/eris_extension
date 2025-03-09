@@ -30,7 +30,7 @@ class DomProcessor {
                     namePlaceholder?.innerText;
                 const contactName = contactNameRaw?.trim();
 
-                const isSingleContact = contactName !== "" && contactName !== undefined;
+                const isSingleContact = !!contactName; // "" or undefined => boolean
                 const isNewConversation = contactName !== this.currentConversation;
                 if (isNewConversation) {
                     if (isSingleContact) {
