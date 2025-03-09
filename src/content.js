@@ -1,7 +1,9 @@
-// Communicate with MAIN world script
 window.addEventListener('message', (event) => {
-    if (event.data.type === 'WA_JS_READY') {
+    //console.log("got a event:", event);
+    if (event.data.type === 'WPP_FULLY_READY') {
         console.log('WA-JS is ready!');
+        clearInterval(event.data.intervalId);
+        console.log(document.body);
     }
 });
 
@@ -20,18 +22,19 @@ function attachConversationListeners() {
     });
 }
 
-function waitLogging() {
-    console.log('User is not logged in.');
-    console.log(WPP.conn.isAuthenticated())
-    const observer = new MutationObserver(() => {
-        if (window.WPP.conn.isAuthenticated()) {
-            console.log('User has logged in.');
-            attachConversationListeners();
-            observer.disconnect();
-        }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
+function updateSelectedConversation() {
+    const interval = setInterval(() => {
+        const conversationPanel = document.getElementById("main");
+        if (conversationPanel !== null) {
+            const namePlaceholder = document.getElementById("main").querySelector("header")?.children[1]?.firstElementChild?.firstElementChild?.firstElementChild?.firstElementChild;
+            /** @type {string | undefined} */
+            const contactNameRaw = (namePlaceholder?.firstElementChild?.alt !== undefined) ?
+                namePlaceholder?.innerText + namePlaceholder?.firstElementChild?.alt :
+                namePlaceholder?.innerText;
+            const contactName = contactNameRaw?.trim();
+            const isSingleContact = !(contactName === "" || contactName === undefined);
+        };
+    }, 1000);
 }
 
-//waitLogging();
-
+updateSelectedConversation();
