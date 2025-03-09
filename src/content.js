@@ -32,9 +32,13 @@ class DomProcessor {
 
                 const isSingleContact = contactName !== "" && contactName !== undefined;
                 const isNewConversation = contactName !== this.currentConversation;
-                if (isSingleContact && isNewConversation) {
-                    this.currentConversation = contactName;
-                    this.attachInitAuditableConversationButton();
+                if (isNewConversation) {
+                    if (isSingleContact) {
+                        this.currentConversation = contactName;
+                        this.attachInitAuditableConversationButton();
+                    } else {
+                        this.currentConversation = null;
+                    }
                 }
             };
         }, 1000);
