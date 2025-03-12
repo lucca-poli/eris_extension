@@ -35,7 +35,7 @@ class DomProcessor {
                 if (isNewConversation) {
                     if (isSingleContact) {
                         this.currentConversation = contactName;
-                        this.attachInitAuditableConversationButton();
+                        this.attachInitAuditableConversationButton(contactName);
                     } else {
                         this.currentConversation = null;
                     }
@@ -44,8 +44,10 @@ class DomProcessor {
         }, 1000);
     }
 
-    /** @private */
-    attachInitAuditableConversationButton() {
+    /** @private 
+     * @param {string} conversationName 
+     */
+    attachInitAuditableConversationButton(conversationName) {
         const attachmentsDiv = document.getElementById("main").querySelector("footer")
             ?.firstElementChild?.firstElementChild?.querySelector("span")?.firstElementChild?.firstElementChild;
         console.log(attachmentsDiv);
@@ -61,7 +63,12 @@ class DomProcessor {
         auditableButton.style.transition = "opacity 0.2s ease-in-out";
         auditableButton.innerText = "🔲"; // Replace with your own icon
 
-        auditableButton.addEventListener("click", () => console.log("Hello!"));
+        auditableButton.addEventListener("click", () => chrome.runtime.sendMessage({ action: "init-auditable-button-clicked", data: conversationName, to: "background" }, (response) => {
+            console.log("received response:", response);
+        }));
+        // O botão tem que:
+        // solicitar conversa auditavel se uma conversa não for auditavel
+        // encerrar conversa auditável se a conversa for auditável
 
         attachmentsDiv?.appendChild(auditableButton);
     }

@@ -1,8 +1,13 @@
-console.log("3")
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'conversation_clicked') {
-        const { contactName } = message;
-        console.log(`User clicked on conversation with: ${contactName}`);
-        // You can perform additional actions here, such as storing the data or sending it to an external API
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.to !== "background") return;
+
+    switch (message.action) {
+        case "init-auditable-button-clicked":
+            console.log("Chegou no background");
+            sendResponse(`Message arrived: ${message.data}`);
+            break;
+        default:
+            console.log("Action to execute not found.");
+            console.log("Action: ", message.action);
     }
 });

@@ -8,7 +8,8 @@ module.exports = {
     mode: "development",
     entry: {
         "wa-js": "./wa-js.js",
-        "content": "./content.js"
+        "content": "./content.js",
+        "background": "./background.js"
     },
     output: {
         filename: "[name].js",
