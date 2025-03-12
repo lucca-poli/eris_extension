@@ -18,9 +18,9 @@ module.exports = {
     resolve: {
         extensions: ['.js'],
         preferRelative: true,
-        //alias: {
-        //    utils: path.resolve(__dirname, 'src/utils')
-        //}
+        alias: {
+            utils: path.resolve(__dirname, 'src/utils')
+        }
     },
     watch: true,
     watchOptions: {

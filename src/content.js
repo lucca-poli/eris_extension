@@ -1,3 +1,5 @@
+import { communicationActions, receivers } from "./utils/types.js"
+
 window.addEventListener('message', (event) => {
     //console.log("got a event:", event);
     if (event.data.type === 'WPP_FULLY_READY') {
@@ -63,7 +65,7 @@ class DomProcessor {
         auditableButton.style.transition = "opacity 0.2s ease-in-out";
         auditableButton.innerText = "🔲"; // Replace with your own icon
 
-        auditableButton.addEventListener("click", () => chrome.runtime.sendMessage({ action: "init-auditable-button-clicked", data: conversationName, to: "background" }, (response) => {
+        auditableButton.addEventListener("click", () => chrome.runtime.sendMessage({ action: communicationActions.init_auditable_button_clicked, data: conversationName, to: receivers.background }, (response) => {
             console.log("received response:", response);
         }));
         // O botão tem que:
