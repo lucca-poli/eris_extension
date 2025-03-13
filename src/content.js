@@ -1,4 +1,4 @@
-import { communicationActions, receivers } from "./utils/types.js"
+import { actionOptions, receiverOptions } from "./utils/types.js"
 
 window.addEventListener('message', (event) => {
     //console.log("got a event:", event);
@@ -65,7 +65,7 @@ class DomProcessor {
         auditableButton.style.transition = "opacity 0.2s ease-in-out";
         auditableButton.innerText = "🔲"; // Replace with your own icon
 
-        auditableButton.addEventListener("click", () => chrome.runtime.sendMessage({ action: communicationActions.init_auditable_button_clicked, data: conversationName, to: receivers.background }, (response) => {
+        auditableButton.addEventListener("click", () => chrome.runtime.sendMessage({ action: actionOptions.init_auditable_button_clicked, data: conversationName, to: receiverOptions.background }, (response) => {
             console.log("received response:", response);
         }));
         // O botão tem que:

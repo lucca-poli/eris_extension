@@ -1,10 +1,10 @@
-import { communicationActions, receivers } from "./utils/types.js"
+import { actionOptions, receiverOptions } from "./utils/types.js"
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.to !== receivers.background) return;
+    if (message.to !== receiverOptions.background) return;
 
     switch (message.action) {
-        case communicationActions.init_auditable_button_clicked:
+        case actionOptions.init_auditable_button_clicked:
             console.log("Chegou no background");
             sendResponse(`Message arrived: ${message.data}`);
             break;
