@@ -1,5 +1,7 @@
 import { actionOptions, agentOptions } from "./utils/types.js"
-import { FrontMessager } from "./utils/InternalMessager.js";
+import { WindowMessager } from "./utils/InternalMessager.js";
+
+const FrontMessager = new WindowMessager();
 
 /** @type {import('./utils/types.js').InternalMessage} */
 const filter = {
@@ -7,9 +9,8 @@ const filter = {
     to: agentOptions.content,
     action: actionOptions.debug
 };
-FrontMessager.listenMessage(filter, (payload) => {
+FrontMessager.listenMessage(filter, () => {
     console.log("baatata");
-    console.log(payload);
 });
 
 class DomProcessor {
@@ -76,7 +77,6 @@ class DomProcessor {
             to: agentOptions.injected
         };
         auditableButton.addEventListener("click", () => {
-            console.log("Sending message from content");
             FrontMessager.sendMessage(message);
         });
         // O botão tem que:

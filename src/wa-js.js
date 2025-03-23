@@ -1,9 +1,11 @@
 import WPP from "@wppconnect/wa-js"
 import { agentOptions, actionOptions } from "./utils/types.js"
-import { FrontMessager } from "./utils/InternalMessager.js";
+import { WindowMessager } from "./utils/InternalMessager.js";
 
 /** @type {typeof WPP} */
 const WhatsappLayer = window.WPP;
+
+const FrontMessager = new WindowMessager();
 
 /** @type {import('./utils/types.js').InternalMessage} */
 const filter = {
@@ -23,4 +25,7 @@ FrontMessager.listenMessage(filter, () => {
         payload: activeChat
     }
     FrontMessager.sendMessage(message);
+    console.log("Returned from message sent");
+    return;
 });
+

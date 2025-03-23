@@ -1,7 +1,8 @@
 export class WindowMessager {
     constructor() {
-        /** @type {Map<Function, Function>} */
-        this.listenerMap = new Map();
+        /** @type {import("./types.js").InternalMessage[]} */
+        this.messageQueue = [];
+        this.isListening = false;
     }
 
     /**
@@ -9,8 +10,13 @@ export class WindowMessager {
      * @returns {void}
     */
     sendMessage(internalMessage) {
-        console.log("🛠️ Sending message via window.postMessage:", internalMessage);
-        window.postMessage(internalMessage, "*");
+        if (this.isListening) {
+            this.messageQueue.push(internalMessage);
+        } else {
+            console.log("🛠️ Sending message via window.postMessage:", internalMessage);
+            console.log("State of queue:", this.messageQueue);
+            window.postMessage(internalMessage, "*");
+        }
     }
 
     /**
@@ -19,8 +25,9 @@ export class WindowMessager {
      * @returns {void}
     */
     listenMessage(filter, callback) {
-        const wrappedListener = (event) => {
-            console.log("🛠️ Receiving event from window.postMessage:", event);
+        window.addEventListener("message", (event) => {
+            this.isListening = true;
+            console.log("🛠️ Receiving event from window.postMessage:", event.data);
             /** @type {import("./types.js").InternalMessage} */
             const message = event.data;
 
@@ -30,9 +37,12 @@ export class WindowMessager {
                 message.action === filter.action;
             if (!matchesFilter) return;
 
+            console.log("Message reached callback");
             callback(message.payload);
-        };
+            this.isListening = false;
+            console.log("Callback processed");
+        });
 
-        window.addEventListener("message", wrappedListener);
+        console.log("Callback really processed?");
     }
 }
