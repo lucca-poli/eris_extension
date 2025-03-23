@@ -1,6 +1,14 @@
 import { actionOptions, agentOptions } from "./utils/types.js"
 import { WindowMessager } from "./utils/InternalMessager.js";
 
+function injectScript(file_path) {
+    const script = document.createElement('script');
+    script.setAttribute('type', 'text/javascript');
+    script.setAttribute('src', chrome.runtime.getURL(file_path));
+    document.documentElement.appendChild(script);
+}
+injectScript('js/wa-js.js');
+
 const FrontMessager = new WindowMessager();
 
 /** @type {import('./utils/types.js').InternalMessage} */
