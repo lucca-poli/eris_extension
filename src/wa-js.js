@@ -1,17 +1,26 @@
 import WPP from "@wppconnect/wa-js"
+import { agentOptions, actionOptions } from "./utils/types.js"
+import { FrontMessager } from "./utils/InternalMessager.js";
 
 /** @type {typeof WPP} */
 const WhatsappLayer = window.WPP;
 
-function waitUserLogging(timeout = 30000) {
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-        if (WhatsappLayer.isFullReady) {
-            //clearInterval(interval);
-            window.postMessage({ type: 'WPP_FULLY_READY', intervalId: interval }, '*');
-        } else if (Date.now() - startTime > timeout) {
-            //clearInterval(interval);
-            console.log("Login time has timed out!");
-        }
-    }, 1000);
+/** @type {import('./utils/types.js').InternalMessage} */
+const filter = {
+    from: agentOptions.content,
+    to: agentOptions.injected,
+    action: actionOptions.init_auditable_button_clicked
 }
+FrontMessager.listenMessage(filter, () => {
+    const activeChat = WhatsappLayer.chat.getActiveChat();
+    console.log("Got active chat:", activeChat);
+
+    /** @type {import('./utils/types.js').InternalMessage} */
+    const message = {
+        from: agentOptions.injected,
+        to: agentOptions.content,
+        action: actionOptions.debug,
+        payload: activeChat
+    }
+    FrontMessager.sendMessage(message);
+});

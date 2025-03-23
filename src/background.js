@@ -1,15 +1,15 @@
-import { actionOptions, receiverOptions } from "./utils/types.js"
+import { agentOptions, actionOptions } from "./utils/types.js"
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.to !== receiverOptions.background) return;
-
-    switch (message.action) {
-        case actionOptions.init_auditable_button_clicked:
-            console.log("Chegou no background");
-            sendResponse(`Message arrived: ${message.data}`);
-            break;
-        default:
-            console.log("Action to execute not found.");
-            console.log("Action: ", message.action);
-    }
-});
+//chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
+//    if (message.action !== actionOptions.init_auditable_button_clicked) return;
+//    console.log("Received:", message);
+//
+//    /** @type {import("./utils/types.js").InternalMessage} internalMessage */
+//    const internalMessage = {
+//        action: message.action,
+//        data: message.data,
+//        from: agentOptions.background,
+//        to: agentOptions.wa_js
+//    };
+//    chrome.tabs.sendMessage(internalMessage);
+//});
