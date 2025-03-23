@@ -13,19 +13,17 @@ const filter = {
     to: agentOptions.injected,
     action: actionOptions.init_auditable_button_clicked
 }
-FrontMessager.listenMessage(filter, () => {
+FrontMessager.listenMessage(filter, async () => {
     const activeChat = WhatsappLayer.chat.getActiveChat();
-    console.log("Got active chat:", activeChat);
+    const returnMessage = await WhatsappLayer.chat.sendTextMessage(activeChat.id._serialized, "Requesting Auditable Message");
 
     /** @type {import('./utils/types.js').InternalMessage} */
     const message = {
         from: agentOptions.injected,
         to: agentOptions.content,
         action: actionOptions.debug,
-        payload: activeChat
+        payload: { ack: returnMessage.ack, id: activeChat.id }
     }
     FrontMessager.sendMessage(message);
-    console.log("Returned from message sent");
-    return;
 });
 

@@ -25,9 +25,11 @@ export class WindowMessager {
                 message.action === filter.action;
             if (!matchesFilter) return;
 
-            console.log("Message reached callback");
-            callback(message.payload);
-            console.log("Callback processed");
+            try {
+                callback(message.payload);
+            } catch (error) {
+                console.error("Error in callback processing:", error);
+            }
         };
 
         window.addEventListener("message", listener);
