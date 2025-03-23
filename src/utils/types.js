@@ -19,6 +19,13 @@
  * @property {IAgentOptions} to - Receiver
 */
 
+/**
+ * @typedef {Object} IAuditableChatOptions
+ * @property {string} request - Action "request".
+ * @property {string} accept - Action "accept".
+ * @property {string} end - Action "end.
+*/
+
 /** @type {IActionOptions} */
 export const actionOptions = {
     init_auditable_button_clicked: "init-auditable-button-clicked",
@@ -31,3 +38,10 @@ export const agentOptions = {
     content: "content",
     background: "background"
 };
+
+/** @type {IAuditableChatOptions} */
+export const auditableChatOptions = {
+    request: "Requesting auditable conversation.",
+    accept: "Auditable conversation accepted.",
+    end: "Auditable conversation ended. Logs available in popup."
+}
