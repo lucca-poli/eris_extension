@@ -1,53 +1,83 @@
-window.addEventListener('message', (event) => {
-    //console.log("got a event:", event);
-    if (event.data.type === 'WPP_FULLY_READY') {
-        console.log('WA-JS is ready!');
-        clearInterval(event.data.intervalId);
-        console.log(document.body);
-    }
-});
+import { ActionOptions, AgentOptions } from "./utils/types.js"
+import { WindowMessager } from "./utils/InternalMessager.js";
+
+const FrontMessager = new WindowMessager();
 
 class DomProcessor {
     constructor() {
-        /** @type {string | null}
+        /**
+         * @type {string | null}
          * @private
          */
-        this.currentConversation = null;
+        this.currentChat = null;
 
-        this.updateSelectedConversation();
+        this.updateChatState();
+    }
+
+    /**
+     * @private
+     * @returns {string | undefined}
+    */
+    searchCurrentChat() {
+        const chatPanel = document.getElementById("main");
+        if (chatPanel === null) return;
+        const namePlaceholder = chatPanel.querySelector("header")
+            ?.children[1]?.firstElementChild?.firstElementChild?.firstElementChild?.firstElementChild;
+        /** @type {string | undefined} */
+        const contactNameRaw = (namePlaceholder?.firstElementChild?.alt !== undefined) ?
+            namePlaceholder?.innerText + namePlaceholder?.firstElementChild?.alt :
+            namePlaceholder?.innerText;
+        return contactNameRaw?.trim();
+    }
+
+    /**
+     * @private
+     * @param {string | undefined} contactName 
+     * @returns {void}
+    */
+    updateCurrentChat(contactName) {
+        const isSingleContact = !!contactName; // "" or undefined => boolean
+        const isNewChat = contactName !== this.currentChat;
+        if (isNewChat) {
+            if (isSingleContact) {
+                this.currentChat = contactName;
+                this.attachInitAuditableChatButton();
+            } else {
+                this.currentChat = null;
+            }
+        };
     }
 
     /** @private */
-    updateSelectedConversation() {
+    updateChatState() {
         setInterval(() => {
-            const conversationPanel = document.getElementById("main");
-            if (conversationPanel !== null) {
-                const namePlaceholder = conversationPanel.querySelector("header")
-                    ?.children[1]?.firstElementChild?.firstElementChild?.firstElementChild?.firstElementChild;
-                /** @type {string | undefined} */
-                const contactNameRaw = (namePlaceholder?.firstElementChild?.alt !== undefined) ?
-                    namePlaceholder?.innerText + namePlaceholder?.firstElementChild?.alt :
-                    namePlaceholder?.innerText;
-                const contactName = contactNameRaw?.trim();
+            const contactName = this.searchCurrentChat();
+            this.updateCurrentChat(contactName);
 
-                const isSingleContact = contactName !== "" && contactName !== undefined;
-                const isNewConversation = contactName !== this.currentConversation;
-                if (isSingleContact && isNewConversation) {
-                    this.currentConversation = contactName;
-                    this.attachInitAuditableConversationButton();
-                }
+            // 1. Get last message via wajs api
+            /** @type {import("./utils/types.js").InternalMessage} message */
+            const message = {
+                from: AgentOptions.CONTENT,
+                to: AgentOptions.INJECTED,
+                action: ActionOptions.GET_LAST_CHAT_MESSAGE,
+                payload: "5511972172712@c.us" // teste com o chatId do kouki
             };
+            FrontMessager.sendMessage(message);
+            // 2. If auditable is not instanciated and a request is observed -> update chat status to auditable in DOM class (by now)
+            // 3. Else if it is instanciate pass to background to process (just console by now)
         }, 1000);
     }
 
-    /** @private */
-    attachInitAuditableConversationButton() {
+    /**
+     * @private 
+     * @param {string} contactName 
+     */
+    attachInitAuditableChatButton() {
         const attachmentsDiv = document.getElementById("main").querySelector("footer")
             ?.firstElementChild?.firstElementChild?.querySelector("span")?.firstElementChild?.firstElementChild;
-        console.log(attachmentsDiv);
 
         const auditableButton = document.createElement("div");
-        auditableButton.className = "auditable-wpp-conversations-button";
+        auditableButton.className = "auditable-wpp-Chats-button";
         auditableButton.style.width = "46px";
         auditableButton.style.height = "52px";
         auditableButton.style.display = "flex";
@@ -57,10 +87,30 @@ class DomProcessor {
         auditableButton.style.transition = "opacity 0.2s ease-in-out";
         auditableButton.innerText = "🔲"; // Replace with your own icon
 
-        auditableButton.addEventListener("click", () => console.log("Hello!"));
+        /** @type {import("./utils/types.js").InternalMessage} message */
+        const message = {
+            action: ActionOptions.INIT_AUDITABLE_BUTTON_CLICKED,
+            from: AgentOptions.CONTENT,
+            to: AgentOptions.INJECTED
+        };
+        auditableButton.addEventListener("click", () => {
+            FrontMessager.sendMessage(message);
+        });
+
+        /** @type {import('./utils/types.js').InternalMessage} */
+        const filter = {
+            from: AgentOptions.INJECTED,
+            to: AgentOptions.CONTENT,
+            action: ActionOptions.INIT_AUDITABLE_BUTTON_CLICKED
+        };
+        FrontMessager.listenMessage(filter, (payload) => {
+            console.log("Current chat id: ", payload)
+        });
+
 
         attachmentsDiv?.appendChild(auditableButton);
     }
 }
 
 const domProcessorRepository = new DomProcessor();
+

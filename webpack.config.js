@@ -1,25 +1,26 @@
-const path = require('path');
-const CopyPlugin = require('copy-webpack-plugin');
+import path from 'path';
+import CopyPlugin from 'copy-webpack-plugin';
 
 /** @type {import('webpack').Configuration} **/
-module.exports = {
-    context: path.resolve(__dirname, "src"),
+export default {
+    context: path.resolve(import.meta.dirname, "src"),
     devtool: "source-map",
     mode: "development",
     entry: {
         "wa-js": "./wa-js.js",
-        "content": "./content.js"
+        "content": "./content.js",
+        "background": "./background.js"
     },
     output: {
         filename: "[name].js",
-        path: path.resolve(__dirname, "dist", "js")
+        path: path.resolve(import.meta.dirname, "dist", "js")
     },
     resolve: {
         extensions: ['.js'],
         preferRelative: true,
-        //alias: {
-        //    utils: path.resolve(__dirname, 'src/utils')
-        //}
+        alias: {
+            utils: path.resolve(import.meta.dirname, 'src/utils')
+        }
     },
     watch: true,
     watchOptions: {

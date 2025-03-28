@@ -1,17 +1,41 @@
 import WPP from "@wppconnect/wa-js"
+import { AgentOptions, ActionOptions, AuditableChatOptions } from "./utils/types.js"
+import { WindowMessager } from "./utils/InternalMessager.js";
 
 /** @type {typeof WPP} */
 const WhatsappLayer = window.WPP;
 
-function waitUserLogging(timeout = 30000) {
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-        if (WhatsappLayer.isFullReady) {
-            //clearInterval(interval);
-            window.postMessage({ type: 'WPP_FULLY_READY', intervalId: interval }, '*');
-        } else if (Date.now() - startTime > timeout) {
-            //clearInterval(interval);
-            console.log("Login time has timed out!");
-        }
-    }, 1000);
+const InjectedMessager = new WindowMessager();
+
+/** @type {import('./utils/types.js').InternalMessage} */
+const filter = {
+    from: AgentOptions.CONTENT,
+    to: AgentOptions.INJECTED,
+    action: ActionOptions.INIT_AUDITABLE_BUTTON_CLICKED
 }
+InjectedMessager.listenMessage(filter, async () => {
+    const activeChat = WhatsappLayer.chat.getActiveChat();
+    const returnMessage = await WhatsappLayer.chat.sendTextMessage(activeChat.id._serialized, AuditableChatOptions.REQUEST);
+
+    if (returnMessage.ack === 1) {
+        /** @type {import('./utils/types.js').InternalMessage} */
+        const message = {
+            from: AgentOptions.INJECTED,
+            to: AgentOptions.CONTENT,
+            action: ActionOptions.INIT_AUDITABLE_BUTTON_CLICKED,
+            payload: activeChat.id
+        }
+        InjectedMessager.sendMessage(message);
+    }
+});
+
+/** @type {import('./utils/types.js').InternalMessage} getLastMessageFilter */
+const getLastMessageFilter = {
+    from: AgentOptions.CONTENT,
+    to: AgentOptions.INJECTED,
+    action: ActionOptions.GET_LAST_CHAT_MESSAGE
+};
+InjectedMessager.listenMessage(getLastMessageFilter, async (payload) => {
+    const chatMessages = await WhatsappLayer.chat.getMessages(payload, { count: 1 });
+    //console.log(chatMessages);
+})

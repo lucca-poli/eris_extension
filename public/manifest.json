@@ -4,9 +4,9 @@
   "version": "1.0",
   "permissions": ["scripting", "activeTab"],
   "manifest_version": 3,
-  // "background": {
-  //   "service_worker": "src/background.js"
-  // },
+  "background": {
+    "service_worker": "js/background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://web.whatsapp.com/*"],
