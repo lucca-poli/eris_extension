@@ -10,11 +10,11 @@
   "content_scripts": [
     {
       "matches": ["https://web.whatsapp.com/*"],
-      "js": ["js/content.js"],
+      "js": ["js/front.js"],
       "run_at": "document_start"
     },
     {
-      "js": ["js/wa-js.js"],
+      "js": ["js/injected_api.js"],
       "matches": ["https://web.whatsapp.com/*"],
       "world": "MAIN",
       "run_at": "document_start"
@@ -26,7 +26,7 @@
   "web_accessible_resources": [
     {
       "matches": ["https://web.whatsapp.com/*"],
-      "resources": ["js/wa-js.js", "js/content.js" ]
+      "resources": ["js/injected_api.js", "js/front.js" ]
     }
   ]
 }

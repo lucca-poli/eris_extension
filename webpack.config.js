@@ -7,8 +7,8 @@ export default {
     devtool: "source-map",
     mode: "development",
     entry: {
-        "wa-js": "./wa-js.js",
-        "content": "./content.js",
+        "injected_api": "./injected_api.js",
+        "front": "./front.js",
         "background": "./background.js"
     },
     output: {

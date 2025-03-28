@@ -2,7 +2,6 @@
   "name": "eris_extension",
   "version": "1.0.0",
   "description": "A extention that provides a auditable chat in whatsapp web",
-  "main": "index.js",
   "type": "module",
   "scripts": {
     "build": "webpack",
