@@ -4,7 +4,8 @@
   "description": "A extention that provides a auditable chat in whatsapp web",
   "type": "module",
   "scripts": {
-    "build": "webpack",
+    "dev": "tsc && webpack --mode development",
+    "build": "tsc && webpack",
     "test": "run"
   },
   "author": "Luiz Carlos de Azevedo Santana",
@@ -13,8 +14,11 @@
     "@wppconnect/wa-js": "^3.16.3"
   },
   "devDependencies": {
+    "@tsconfig/recommended": "^1.0.8",
     "@types/chrome": "^0.0.300",
     "copy-webpack-plugin": "^12.0.2",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.2",
     "webpack": "^5.98.0",
     "webpack-cli": "^6.0.1"
   }

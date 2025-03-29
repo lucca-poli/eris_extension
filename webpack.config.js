@@ -15,12 +15,27 @@ export default {
         filename: "[name].js",
         path: path.resolve(import.meta.dirname, "dist", "js")
     },
+    module: {
+        rules: [
+            {
+                test: /\.([cm]?ts|tsx)$/,
+                use: {
+                    loader: "ts-loader",
+                    options: {
+                        transpileOnly: true,
+                    },
+                },
+                exclude: /node_modules/,
+            },
+        ],
+    },
     resolve: {
-        extensions: ['.js'],
+        extensions: [".ts", ".js"],
+        extensionAlias: {
+            utils: path.resolve(import.meta.dirname, 'src/utils'),
+            ".ts": [".js", ".ts"],
+        },
         preferRelative: true,
-        alias: {
-            utils: path.resolve(import.meta.dirname, 'src/utils')
-        }
     },
     watch: true,
     watchOptions: {
