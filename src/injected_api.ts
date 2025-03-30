@@ -1,9 +1,10 @@
+import "@wppconnect/wa-js"
 import WPP from "@wppconnect/wa-js"
 import { AgentOptions, ActionOptions, AuditableChatOptions, InternalMessage } from "./utils/types"
 import { WindowMessager } from "./utils/InternalMessager";
 
 // @ts-ignore
-const WhatsappLayer = WPP;
+const WhatsappLayer: typeof WPP = window.WPP;
 
 const InjectedMessager = new WindowMessager();
 
