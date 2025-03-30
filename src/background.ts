@@ -1,5 +1,3 @@
-import { agentOptions, actionOptions } from "./utils/types.js"
-
 //chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
 //    if (message.action !== actionOptions.init_auditable_button_clicked) return;
 //    console.log("Received:", message);

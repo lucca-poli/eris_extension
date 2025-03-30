@@ -14,7 +14,6 @@
     "@wppconnect/wa-js": "^3.16.3"
   },
   "devDependencies": {
-    "@tsconfig/recommended": "^1.0.8",
     "@types/chrome": "^0.0.300",
     "copy-webpack-plugin": "^12.0.2",
     "ts-loader": "^9.5.2",
