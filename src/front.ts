@@ -1,5 +1,5 @@
-import { ActionOptions, AgentOptions, InternalMessage } from "./utils/types.js"
-import { WindowMessager } from "./utils/InternalMessager.js";
+import { ActionOptions, AgentOptions, InternalMessage } from "./utils/types"
+import { WindowMessager } from "./utils/InternalMessager";
 
 const FrontMessager = new WindowMessager();
 
@@ -44,13 +44,13 @@ class DomProcessor {
             this.updateCurrentChat(contactName);
 
             // 1. Get last message via wajs api
-            const message: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.GET_LAST_CHAT_MESSAGE,
-                payload: "5511972172712@c.us" // teste com o chatId do kouki
-            };
-            FrontMessager.sendMessage(message);
+            //const message: InternalMessage = {
+            //    from: AgentOptions.CONTENT,
+            //    to: AgentOptions.INJECTED,
+            //    action: ActionOptions.GET_LAST_CHAT_MESSAGE,
+            //    payload: "5511972172712@c.us" // teste com o chatId do kouki
+            //};
+            //FrontMessager.sendMessage(message);
             // 2. If auditable is not instanciated and a request is observed -> update chat status to auditable in DOM class (by now)
             // 3. Else if it is instanciate pass to background to process (just console by now)
         }, 1000);

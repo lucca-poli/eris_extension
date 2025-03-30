@@ -1,4 +1,4 @@
-import { InternalMessage, MessagerService } from "./types.js";
+import { InternalMessage, MessagerService } from "./types";
 
 //export class InternalMessager {
 // 1. Recebe os serviços de transmissão no constructor e o Owner. serviços é um array de InternalMessagerService

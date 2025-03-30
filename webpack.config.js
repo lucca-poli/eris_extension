@@ -1,29 +1,30 @@
 import path from 'path';
 import CopyPlugin from 'copy-webpack-plugin';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /** @type {import('webpack').Configuration} **/
 export default {
-    context: path.resolve(import.meta.dirname, "src"),
+    context: path.resolve(__dirname, "src"),
     devtool: "source-map",
     mode: "development",
     entry: {
-        "injected_api": "./injected_api.js",
-        "front": "./front.js",
-        "background": "./background.js"
+        "injected_api": "./injected_api.ts",
+        "front": "./front.ts",
+        "background": "./background.ts"
     },
     output: {
         filename: "[name].js",
-        path: path.resolve(import.meta.dirname, "dist", "js")
+        path: path.resolve(__dirname, "dist/js")
     },
     module: {
         rules: [
             {
-                test: /\.([cm]?ts|tsx)$/,
+                test: /\.ts$/,
                 use: {
                     loader: "ts-loader",
-                    options: {
-                        transpileOnly: true,
-                    },
                 },
                 exclude: /node_modules/,
             },
@@ -32,10 +33,8 @@ export default {
     resolve: {
         extensions: [".ts", ".js"],
         extensionAlias: {
-            utils: path.resolve(import.meta.dirname, 'src/utils'),
-            ".ts": [".js", ".ts"],
+            utils: path.resolve(__dirname, 'src/utils'),
         },
-        preferRelative: true,
     },
     watch: true,
     watchOptions: {
