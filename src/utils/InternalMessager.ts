@@ -6,6 +6,18 @@ export class InternalMessager {
         this.messagerServices = messagerServices;
     }
 
+    sendMessage(internalMessage: InternalMessage): void {
+        const [service, message] = this.searchRoute(internalMessage);
+        service.sendMessage(message);
+    }
+
+    listenMessage(filter: InternalMessage, callback: Function): void {
+        if (filter.action === ActionOptions.REPASS_INTERNAL_MESSAGE) {
+            this.sendMessage(filter.payload as InternalMessage);
+        }
+        // ver o serviço que vai ouvir de acordo de (de onde a messagem veio) e (pra onde a mensagem vai)
+    }
+
     private searchRoute(crudeMessage: InternalMessage): [MessagerService, InternalMessage] {
         const originalReceiver = crudeMessage.to;
         const originalSender = crudeMessage.from;

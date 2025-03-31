@@ -18,7 +18,7 @@ export enum AuditableChatOptions {
 };
 
 export type InternalMessage = {
-    payload?: string | Object,
+    payload?: any,
     action: ActionOptions,
     from: AgentOptions,
     to: AgentOptions
