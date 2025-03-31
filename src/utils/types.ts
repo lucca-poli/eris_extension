@@ -1,6 +1,7 @@
 export enum ActionOptions {
     INIT_AUDITABLE_BUTTON_CLICKED = "INIT_AUDITABLE_BUTTON_CLICKED",
     GET_LAST_CHAT_MESSAGE = "GET_LAST_CHAT_MESSAGE",
+    REPASS_INTERNAL_MESSAGE = "REPASS_INTERNAL_MESSAGE",
     DEBUG = "DEBUG"
 };
 
@@ -25,5 +26,12 @@ export type InternalMessage = {
 
 export interface MessagerService {
     sendMessage(internalMessage: InternalMessage): void,
-    listenMessage(filter: InternalMessage, callback: Function): void
-}
+    listenMessage(filter: InternalMessage, callback: Function): void,
+    getRoute(): RouteEndpoints
+};
+
+export type RouteEndpoints = {
+    owner: AgentOptions,
+    receiver: AgentOptions
+};
+

@@ -1,21 +1,61 @@
-import { InternalMessage, MessagerService } from "./types";
+import { ActionOptions, AgentOptions, InternalMessage, MessagerService, RouteEndpoints } from "./types";
 
-//export class InternalMessager {
-// 1. Recebe os serviços de transmissão no constructor e o Owner. serviços é um array de InternalMessagerService
-// O objeto message deve estabelecer suas próprias rotas na construção
-/**
- * @param {string} owner
- * @param {Array} messagerServices
-*/
-//private owner;
-//private messagerServices;
-//constructor(messagerServices: [], owner: string) {
-//    this.owner = owner;
-//}
-// 2. Send and receive messages: make the routing and decide the services per route
-//}
+export class InternalMessager {
+    private messagerServices: MessagerService[];
+    constructor(messagerServices: MessagerService[]) {
+        this.messagerServices = messagerServices;
+    }
+
+    private searchRoute(crudeMessage: InternalMessage): [MessagerService, InternalMessage] {
+        const originalReceiver = crudeMessage.to;
+        const originalSender = crudeMessage.from;
+
+
+        for (const service of this.messagerServices) {
+            const { owner, receiver } = service.getRoute();
+            if (owner !== originalSender) {
+                throw new Error("Wrong sender specified.")
+            }
+
+            if (receiver === originalReceiver) {
+                const message: InternalMessage = {
+                    from: owner,
+                    to: receiver,
+                    action: crudeMessage.action,
+                    payload: crudeMessage.payload
+                }
+                return [service, message];
+            }
+        }
+
+        // Pressuposto que só tem 1 disponível
+        const onlyServiceAvailable = this.messagerServices[0];
+        const possibleReceiver = onlyServiceAvailable.getRoute().receiver;
+        const message: InternalMessage = {
+            from: originalSender,
+            to: possibleReceiver,
+            action: ActionOptions.REPASS_INTERNAL_MESSAGE,
+            payload: {
+                from: possibleReceiver,
+                to: crudeMessage.to,
+                action: crudeMessage.action,
+                payload: crudeMessage.payload
+            } as InternalMessage
+        }
+        return [onlyServiceAvailable, message];
+    }
+}
 
 export class WindowMessager implements MessagerService {
+    private route: RouteEndpoints;
+    constructor(owner: AgentOptions, receiver: AgentOptions) {
+        this.route = { owner, receiver }
+    };
+
+    getRoute(): RouteEndpoints {
+        return this.route;
+    }
+
     sendMessage(internalMessage: InternalMessage): void {
         console.log("🛠️ Sending message via window.postMessage:", internalMessage);
         window.postMessage(internalMessage, "*");
