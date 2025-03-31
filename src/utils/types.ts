@@ -32,6 +32,6 @@ export interface MessagerService {
 
 export type RouteEndpoints = {
     owner: AgentOptions,
-    receiver: AgentOptions
+    counterpart: AgentOptions
 };
 

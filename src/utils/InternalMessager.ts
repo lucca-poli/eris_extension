@@ -7,32 +7,51 @@ export class InternalMessager {
     }
 
     sendMessage(internalMessage: InternalMessage): void {
-        const [service, message] = this.searchRoute(internalMessage);
+        const [service, message] = this.searchSendRoute(internalMessage);
         service.sendMessage(message);
     }
 
     listenMessage(filter: InternalMessage, callback: Function): void {
         if (filter.action === ActionOptions.REPASS_INTERNAL_MESSAGE) {
             this.sendMessage(filter.payload as InternalMessage);
+            return;
         }
-        // ver o serviço que vai ouvir de acordo de (de onde a messagem veio) e (pra onde a mensagem vai)
+        const receiverService = this.getListenerMessagerService({ owner: filter.to, counterpart: filter.from });
+        receiverService.listenMessage(filter, callback);
     }
 
-    private searchRoute(crudeMessage: InternalMessage): [MessagerService, InternalMessage] {
+    private getListenerMessagerService(messageEndpoints: RouteEndpoints): MessagerService {
+        const originalReceiver = messageEndpoints.owner;
+        const originalSender = messageEndpoints.counterpart;
+
+        for (const service of this.messagerServices) {
+            const { owner, counterpart } = service.getRoute();
+            if (owner !== originalReceiver) {
+                throw new Error("Wrong sender specified.")
+            }
+
+            if (counterpart === originalSender) {
+                return service;
+            }
+        }
+
+        throw new Error("Couldn't find a receiver service.");
+    }
+
+    private searchSendRoute(crudeMessage: InternalMessage): [MessagerService, InternalMessage] {
         const originalReceiver = crudeMessage.to;
         const originalSender = crudeMessage.from;
 
-
         for (const service of this.messagerServices) {
-            const { owner, receiver } = service.getRoute();
+            const { owner, counterpart } = service.getRoute();
             if (owner !== originalSender) {
                 throw new Error("Wrong sender specified.")
             }
 
-            if (receiver === originalReceiver) {
+            if (counterpart === originalReceiver) {
                 const message: InternalMessage = {
                     from: owner,
-                    to: receiver,
+                    to: counterpart,
                     action: crudeMessage.action,
                     payload: crudeMessage.payload
                 }
@@ -40,9 +59,9 @@ export class InternalMessager {
             }
         }
 
-        // Pressuposto que só tem 1 disponível
+        // Pressuposto que só tem 1 serviço disponível
         const onlyServiceAvailable = this.messagerServices[0];
-        const possibleReceiver = onlyServiceAvailable.getRoute().receiver;
+        const possibleReceiver = onlyServiceAvailable.getRoute().counterpart;
         const message: InternalMessage = {
             from: originalSender,
             to: possibleReceiver,
@@ -60,8 +79,8 @@ export class InternalMessager {
 
 export class WindowMessager implements MessagerService {
     private route: RouteEndpoints;
-    constructor(owner: AgentOptions, receiver: AgentOptions) {
-        this.route = { owner, receiver }
+    constructor(owner: AgentOptions, counterpart: AgentOptions) {
+        this.route = { owner, counterpart }
     };
 
     getRoute(): RouteEndpoints {
