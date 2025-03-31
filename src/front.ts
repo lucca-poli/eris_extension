@@ -1,7 +1,8 @@
 import { ActionOptions, AgentOptions, InternalMessage } from "./utils/types"
-import { WindowMessager } from "./utils/InternalMessager";
+import { InternalMessager, WindowMessager } from "./utils/InternalMessager";
 
-const FrontMessager = new WindowMessager();
+const FrontWindowMessager = new WindowMessager(AgentOptions.CONTENT, AgentOptions.INJECTED);
+const FrontMessager = new InternalMessager([FrontWindowMessager]);
 
 class DomProcessor {
     private currentChat: string | null;
