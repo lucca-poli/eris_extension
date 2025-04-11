@@ -1,9 +1,28 @@
 # eris_extension
 
-# TODO
+# State logic
+
+- Inserir Botão <-- (isUser && noButton)
+    - Requisita auditável <-- (!isAuditable && !lastMessageIsRequest)
+    - Aceita/Nega <-- (!isAuditable && lastMessageIsRequest && !lastMessageAuthorIsMe)
+    - EncerraAuditável <-- (isAuditable)
+    - 'Do nothing' (auditável já requisitado) <-- (!isAuditable && lastMessageIsRequest && lastMessageAuthorIsMe)
+    - Atualizar chats auditáveis (instanciado) <-- (aceitei chat auditável (trivial)) || (!isAuditable && lastMessageIsAccepted)
+    - Atualizar chats auditáveis (terminado) <-- (encerrei chat auditável (trivial)) || (isAuditable && lastMessageIsEnd)
+- Mandar ultima(s) mensagem para o backend <-- (isAuditable)
+
+Insiro o botão. (tenho registro na classe se botão existe ou não). Se chat existe (botão):
+Vou coletar todos os boleanos que preciso a cada iteração do loop
+Atualizo o botão e mando mensagens pro back processar se preciso
+
+# Refinement Pool
+- Coletar as mensagens discretamente com .on("message") e salvar o estado de todo chat que não for normal
 - Comunicador interno
-    - Implementar comunicar único que recebe estratégias de comunicação (window, chrome). Dependendo do from e to ele tem que saber que serviço ele vai usar e qual rota traçar se for mais de um. Acho que quem tem que guardar as rotas que faz é um método estático dos serviços, dai o messager pega as rotas de cada um e decide o caminho
+    - Montar o from e to dentro da classe, de acordo com o dono, o protocolo e se é send ou listen
     - Implementar response
-- Passar pra TypeScript
 - Fazer logger e botar no comunicador
-- Implementar uma máquina de estados por chat privado. Por enquanto salvar o estado na RAM com um array de objetos no background. Só salvar se o estado for different de NORMAL_CHAT
+- Retirar o botão se chat auditável já foi requisitado
+
+# Bugs
+
+- Se o request não ficar como enviado ele não fica como sendo a ultima mensagem, então um usuário pode clicar várias vezes no botão de requisitar e fica meio paia

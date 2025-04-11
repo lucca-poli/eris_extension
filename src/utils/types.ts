@@ -1,7 +1,12 @@
 export enum ActionOptions {
-    INIT_AUDITABLE_BUTTON_CLICKED = "INIT_AUDITABLE_BUTTON_CLICKED",
+    REQUEST_AUDITABLE_BUTTON_CLICKED = "REQUEST_AUDITABLE_BUTTON_CLICKED",
+    REQUEST_END_AUDITABLE_BUTTON_CLICKED = "REQUEST_END_AUDITABLE_BUTTON_CLICKED",
+    REQUEST_ACCEPT_AUDITABLE_BUTTON_CLICKED = "REQUEST_ACCEPT_AUDITABLE_BUTTON_CLICKED",
+    REQUEST_DENY_AUDITABLE_BUTTON_CLICKED = "REQUEST_DENY_AUDITABLE_BUTTON_CLICKED",
     GET_LAST_CHAT_MESSAGE = "GET_LAST_CHAT_MESSAGE",
+    GET_CURRENT_CHAT = "GET_CURRENT_CHAT",
     REPASS_INTERNAL_MESSAGE = "REPASS_INTERNAL_MESSAGE",
+    PROCESS_AUDITABLE_MESSAGE = "PROCESS_AUDITABLE_MESSAGE",
     DEBUG = "DEBUG"
 };
 
@@ -14,15 +19,19 @@ export enum AgentOptions {
 export enum AuditableChatOptions {
     REQUEST = "Requesting auditable conversation.",
     ACCEPT = "Auditable conversation accepted.",
+    DENY = "Auditable conversation denied.",
     END = "Auditable conversation ended. Logs available in popup."
 };
 
-export type InternalMessage = {
-    payload?: any,
+export type InternalMessageMetadata = {
     action: ActionOptions,
     from: AgentOptions,
     to: AgentOptions
 };
+
+export type InternalMessage = {
+    payload?: any,
+} & InternalMessageMetadata;
 
 export interface MessagerService {
     sendMessage(internalMessage: InternalMessage): void,

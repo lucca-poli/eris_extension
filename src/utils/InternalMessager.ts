@@ -1,4 +1,4 @@
-import { ActionOptions, AgentOptions, InternalMessage, MessagerService, RouteEndpoints } from "./types";
+import { ActionOptions, AgentOptions, InternalMessage, InternalMessageMetadata, MessagerService, RouteEndpoints } from "./types";
 
 export class InternalMessager {
     private messagerServices: MessagerService[];
@@ -11,11 +11,7 @@ export class InternalMessager {
         service.sendMessage(message);
     }
 
-    listenMessage(filter: InternalMessage, callback: Function): void {
-        if (filter.action === ActionOptions.REPASS_INTERNAL_MESSAGE) {
-            this.sendMessage(filter.payload as InternalMessage);
-            return;
-        }
+    listenMessage(filter: InternalMessageMetadata, callback: Function): void {
         const receiverService = this.getListenerMessagerService({ owner: filter.to, counterpart: filter.from });
         receiverService.listenMessage(filter, callback);
     }
@@ -79,22 +75,39 @@ export class InternalMessager {
 
 export class WindowMessager implements MessagerService {
     private route: RouteEndpoints;
+    private listenerIds: Set<string>;
     constructor(owner: AgentOptions, counterpart: AgentOptions) {
         this.route = { owner, counterpart }
+        this.listenerIds = new Set([]);
     };
+
+    private registerListener(listenerFilter: InternalMessageMetadata) {
+        const key = `${listenerFilter.from}_${listenerFilter.to}_${listenerFilter.action}`
+        this.listenerIds.add(key);
+    }
+
+    private listenerExists(listenerFilter: InternalMessageMetadata): boolean {
+        const key = `${listenerFilter.from}_${listenerFilter.to}_${listenerFilter.action}`
+        return this.listenerIds.has(key);
+    }
 
     getRoute(): RouteEndpoints {
         return this.route;
     }
 
     sendMessage(internalMessage: InternalMessage): void {
-        console.log("🛠️ Sending message via window.postMessage:", internalMessage);
+        //console.log("🛠️ Sending message via window.postMessage:", internalMessage);
         window.postMessage(internalMessage, "*");
     }
 
-    listenMessage(filter: InternalMessage, callback: Function): void {
+    listenMessage(filter: InternalMessageMetadata, callback: Function): void {
+        if (this.listenerExists(filter)) {
+            //console.log("Listener already exists");
+            return;
+        }
+
         const listener = (event: MessageEvent) => {
-            console.log("🛠️ Receiving event from window.postMessage:", event.data);
+            //console.log("🛠️ Receiving event from window.postMessage:", event.data);
             const message: InternalMessage = event.data;
 
             const matchesFilter =
@@ -111,5 +124,6 @@ export class WindowMessager implements MessagerService {
         };
 
         window.addEventListener("message", listener);
+        this.registerListener(filter);
     }
 }

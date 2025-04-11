@@ -1,6 +1,6 @@
 import "@wppconnect/wa-js"
 import WPP from "@wppconnect/wa-js"
-import { AgentOptions, ActionOptions, AuditableChatOptions, InternalMessage } from "./utils/types"
+import { AgentOptions, ActionOptions, AuditableChatOptions, InternalMessage, InternalMessageMetadata } from "./utils/types"
 import { InternalMessager, WindowMessager } from "./utils/InternalMessager";
 
 // @ts-ignore
@@ -9,32 +9,77 @@ const WhatsappLayer: typeof WPP = window.WPP;
 const InjectedWindowMessager = new WindowMessager(AgentOptions.INJECTED, AgentOptions.CONTENT);
 const InjectedMessager = new InternalMessager([InjectedWindowMessager]);
 
-const filter: InternalMessage = {
+const denyAuditableButtonClicked: InternalMessageMetadata = {
     from: AgentOptions.CONTENT,
     to: AgentOptions.INJECTED,
-    action: ActionOptions.INIT_AUDITABLE_BUTTON_CLICKED
-}
-InjectedMessager.listenMessage(filter, async () => {
-    const activeChat = WhatsappLayer.chat.getActiveChat() as WPP.whatsapp.ChatModel;
-    const returnMessage = await WhatsappLayer.chat.sendTextMessage(activeChat.id._serialized, AuditableChatOptions.REQUEST);
+    action: ActionOptions.REQUEST_DENY_AUDITABLE_BUTTON_CLICKED
+};
+InjectedMessager.listenMessage(denyAuditableButtonClicked, (payload: string) => {
+    WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.DENY);
+})
 
-    if (returnMessage.ack === 1) {
-        const message: InternalMessage = {
-            from: AgentOptions.INJECTED,
-            to: AgentOptions.CONTENT,
-            action: ActionOptions.INIT_AUDITABLE_BUTTON_CLICKED,
-            payload: activeChat.id
-        }
-        InjectedMessager.sendMessage(message);
-    }
-});
+const acceptAuditableButtonClicked: InternalMessageMetadata = {
+    from: AgentOptions.CONTENT,
+    to: AgentOptions.INJECTED,
+    action: ActionOptions.REQUEST_ACCEPT_AUDITABLE_BUTTON_CLICKED
+};
+InjectedMessager.listenMessage(acceptAuditableButtonClicked, (payload: string) => {
+    WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.ACCEPT);
+})
 
-const getLastMessageFilter: InternalMessage = {
+const endAuditableButtonClicked: InternalMessageMetadata = {
+    from: AgentOptions.CONTENT,
+    to: AgentOptions.INJECTED,
+    action: ActionOptions.REQUEST_END_AUDITABLE_BUTTON_CLICKED
+};
+InjectedMessager.listenMessage(endAuditableButtonClicked, (payload: string) => {
+    WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.END);
+})
+
+const auditableButtonClicked: InternalMessageMetadata = {
+    from: AgentOptions.CONTENT,
+    to: AgentOptions.INJECTED,
+    action: ActionOptions.REQUEST_AUDITABLE_BUTTON_CLICKED
+};
+InjectedMessager.listenMessage(auditableButtonClicked, (payload: string) => {
+    WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.REQUEST);
+})
+
+const getLastMessageFilter: InternalMessageMetadata = {
     from: AgentOptions.CONTENT,
     to: AgentOptions.INJECTED,
     action: ActionOptions.GET_LAST_CHAT_MESSAGE
 };
 InjectedMessager.listenMessage(getLastMessageFilter, async (payload: string) => {
     const chatMessages = await WhatsappLayer.chat.getMessages(payload, { count: 1 });
-    //console.log(chatMessages);
+    const lastMessage = chatMessages[0];
+    //console.log("last message: ", lastMessage)
+
+    const sendResponse: InternalMessage = {
+        to: AgentOptions.CONTENT,
+        from: AgentOptions.INJECTED,
+        action: ActionOptions.GET_LAST_CHAT_MESSAGE,
+        payload: [lastMessage.body, lastMessage.from?._serialized]
+    };
+    InjectedMessager.sendMessage(sendResponse);
+})
+
+const currentChat: InternalMessageMetadata = {
+    from: AgentOptions.CONTENT,
+    to: AgentOptions.INJECTED,
+    action: ActionOptions.GET_CURRENT_CHAT
+};
+InjectedMessager.listenMessage(currentChat, () => {
+    const activeChat = WhatsappLayer.chat.getActiveChat();
+
+    const currentChatResponse: InternalMessage = {
+        from: AgentOptions.INJECTED,
+        to: AgentOptions.CONTENT,
+        action: ActionOptions.GET_CURRENT_CHAT,
+        payload: undefined
+    }
+    if (activeChat?.isUser) {
+        currentChatResponse.payload = activeChat.id._serialized;
+    }
+    InjectedMessager.sendMessage(currentChatResponse);
 })
