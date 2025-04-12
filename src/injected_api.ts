@@ -75,11 +75,15 @@ InjectedMessager.listenMessage(getLastMessageFilter, async (payload: string) => 
     const lastMessage = chatMessages[0];
     //console.log("last message: ", lastMessage)
 
+    const lastChatMessage: chatMessage = {
+        content: lastMessage.body as string,
+        author: lastMessage.from?._serialized as string
+    }
     const sendResponse: InternalMessage = {
         to: AgentOptions.CONTENT,
         from: AgentOptions.INJECTED,
         action: ActionOptions.GET_LAST_CHAT_MESSAGE,
-        payload: [lastMessage.body, lastMessage.from?._serialized]
+        payload: lastChatMessage
     };
     InjectedMessager.sendMessage(sendResponse);
 })

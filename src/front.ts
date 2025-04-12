@@ -165,6 +165,31 @@ class DomProcessor {
         })
     }
 
+    private getLastMessage(chatId: string): Promise<chatMessage> {
+        const requireLastMessage: InternalMessage = {
+            from: AgentOptions.CONTENT,
+            to: AgentOptions.INJECTED,
+            action: ActionOptions.GET_LAST_CHAT_MESSAGE,
+            payload: chatId
+        };
+        FrontMessager.sendMessage(requireLastMessage);
+
+        const requireLastMessageResponse: InternalMessageMetadata = {
+            from: AgentOptions.INJECTED,
+            to: AgentOptions.CONTENT,
+            action: ActionOptions.GET_LAST_CHAT_MESSAGE,
+        };
+        return new Promise((resolve) => {
+            FrontMessager.listenMessage(requireLastMessageResponse, (lastMessage: chatMessage) => {
+                if (lastMessage.content === undefined || lastMessage.author === undefined) {
+                    throw new Error(`Couldn't read last message in chat: ${this.currentChatId}`)
+                };
+
+                resolve(lastMessage);
+            });
+        });
+    }
+
     private updateChatState() {
         setInterval(async () => {
             const contactId = await this.searchCurrentChat();
@@ -183,30 +208,7 @@ class DomProcessor {
 
             if (this.currentChatId === null) return;
 
-            const requireLastMessage: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.GET_LAST_CHAT_MESSAGE,
-                payload: this.currentChatId
-            };
-            FrontMessager.sendMessage(requireLastMessage);
-
-            const requireLastMessageResponse: InternalMessageMetadata = {
-                from: AgentOptions.INJECTED,
-                to: AgentOptions.CONTENT,
-                action: ActionOptions.GET_LAST_CHAT_MESSAGE,
-            };
-            FrontMessager.listenMessage(requireLastMessageResponse, (payload: (string | undefined)[]) => {
-                const [lastMessage, lastMessageAuthorId] = payload;
-                if (lastMessage === undefined || lastMessageAuthorId === undefined) {
-                    throw new Error(`Couldn't read last message in chat: ${this.currentChatId}`)
-                };
-
-                this.lastChatMessage = {
-                    content: lastMessage,
-                    author: lastMessageAuthorId
-                }
-            });
+            this.lastChatMessage = await this.getLastMessage(this.currentChatId)
 
             this.updateButtonState();
 
