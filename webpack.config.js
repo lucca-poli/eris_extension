@@ -33,7 +33,7 @@ export default {
     resolve: {
         extensions: [".ts", ".js"],
         extensionAlias: {
-            utils: path.resolve(__dirname, 'src/utils'),
+            utils: path.resolve(__dirname, 'src', 'utils'),
         },
     },
     watch: true,

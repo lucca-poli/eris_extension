@@ -22,7 +22,9 @@ Atualizo o botão e mando mensagens pro back processar se preciso
     - Implementar response
 - Fazer logger e botar no comunicador
 - Retirar o botão se chat auditável já foi requisitado
+- Passar o armazenamento de conversas para o cliente (localmente)
 
 # Bugs
 
 - Se o request não ficar como enviado ele não fica como sendo a ultima mensagem, então um usuário pode clicar várias vezes no botão de requisitar e fica meio paia
+- Conversa não vira auditável se o outro lado aceitar

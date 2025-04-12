@@ -127,3 +127,53 @@ export class WindowMessager implements MessagerService {
         this.registerListener(filter);
     }
 }
+
+export class ChromeMessager implements MessagerService {
+    private route: RouteEndpoints;
+    private listenerIds: Set<string>;
+    constructor(owner: AgentOptions, counterpart: AgentOptions) {
+        this.route = { owner, counterpart }
+        this.listenerIds = new Set([]);
+    };
+
+    private registerListener(listenerFilter: InternalMessageMetadata) {
+        const key = `${listenerFilter.from}_${listenerFilter.to}_${listenerFilter.action}`
+        this.listenerIds.add(key);
+    }
+
+    private listenerExists(listenerFilter: InternalMessageMetadata): boolean {
+        const key = `${listenerFilter.from}_${listenerFilter.to}_${listenerFilter.action}`
+        return this.listenerIds.has(key);
+    }
+
+    getRoute(): RouteEndpoints {
+        return this.route;
+    }
+
+    sendMessage(internalMessage: InternalMessage): void {
+        chrome.runtime.sendMessage(internalMessage)
+    }
+
+    listenMessage(filter: InternalMessageMetadata, callback: Function): void {
+        if (this.listenerExists(filter)) {
+            //console.log("Listener already exists");
+            return;
+        }
+
+        this.registerListener(filter);
+
+        chrome.runtime.onMessage.addListener((message: InternalMessage, _sender, _sendResponse) => {
+            const matchesFilter =
+                message.from === filter.from &&
+                message.to === filter.to &&
+                message.action === filter.action;
+            if (!matchesFilter) return;
+
+            try {
+                callback(message);
+            } catch (error) {
+                console.error("Error in callback processing:", error);
+            }
+        });
+    }
+}

@@ -1,6 +1,6 @@
 import "@wppconnect/wa-js"
 import WPP from "@wppconnect/wa-js"
-import { AgentOptions, ActionOptions, AuditableChatOptions, InternalMessage, InternalMessageMetadata } from "./utils/types"
+import { AgentOptions, ActionOptions, AuditableChatOptions, InternalMessage, InternalMessageMetadata, chatMessage } from "./utils/types"
 import { InternalMessager, WindowMessager } from "./utils/InternalMessager";
 
 // @ts-ignore
@@ -17,6 +17,26 @@ const denyAuditableButtonClicked: InternalMessageMetadata = {
 InjectedMessager.listenMessage(denyAuditableButtonClicked, (payload: string) => {
     WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.DENY);
 })
+
+const newMessageArrived: InternalMessage = {
+    from: AgentOptions.INJECTED,
+    to: AgentOptions.CONTENT,
+    action: ActionOptions.RECEIVED_NEW_MESSAGE,
+}
+WhatsappLayer.on('chat.new_message', async (chatMessage) => {
+    //console.log('New message received:', chatMessage);
+    const arrivedMessage: chatMessage = {
+        content: chatMessage.body as string,
+        author: chatMessage.from?._serialized as string,
+    }
+    const response: InternalMessage = {
+        from: AgentOptions.INJECTED,
+        to: AgentOptions.CONTENT,
+        action: ActionOptions.RECEIVED_NEW_MESSAGE,
+        payload: arrivedMessage
+    }
+    InjectedMessager.sendMessage(response);
+});
 
 const acceptAuditableButtonClicked: InternalMessageMetadata = {
     from: AgentOptions.CONTENT,

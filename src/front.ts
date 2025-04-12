@@ -1,12 +1,8 @@
-import { ActionOptions, AgentOptions, AuditableChatOptions, InternalMessage, InternalMessageMetadata } from "./utils/types"
-import { InternalMessager, WindowMessager } from "./utils/InternalMessager";
-
-type chatMessage = {
-    content: string,
-    author: string
-};
+import { ActionOptions, AgentOptions, AuditableChatOptions, chatMessage, InternalMessage, InternalMessageMetadata } from "./utils/types"
+import { InternalMessager, WindowMessager, ChromeMessager } from "./utils/InternalMessager";
 
 const FrontWindowMessager = new WindowMessager(AgentOptions.CONTENT, AgentOptions.INJECTED);
+const FrontChromeMessager = new ChromeMessager(AgentOptions.CONTENT, AgentOptions.BACKGROUND);
 const FrontMessager = new InternalMessager([FrontWindowMessager]);
 
 class DomProcessor {
@@ -139,36 +135,51 @@ class DomProcessor {
         }
     }
 
+    private processIncomingChatMessage(): void {
+        const newMessage: InternalMessageMetadata = {
+            from: AgentOptions.INJECTED,
+            to: AgentOptions.CONTENT,
+            action: ActionOptions.RECEIVED_NEW_MESSAGE,
+        }
+        FrontMessager.listenMessage(newMessage, (incomingMessage: chatMessage) => {
+            console.log("new message arrived: ", incomingMessage);
+        })
+    }
+
+    private searchCurrentChat(): Promise<string | undefined> {
+        const requireCurrentChat: InternalMessage = {
+            from: AgentOptions.CONTENT,
+            to: AgentOptions.INJECTED,
+            action: ActionOptions.GET_CURRENT_CHAT,
+        }
+        FrontMessager.sendMessage(requireCurrentChat);
+
+        const requireCurrentChatResponse: InternalMessageMetadata = {
+            from: AgentOptions.INJECTED,
+            to: AgentOptions.CONTENT,
+            action: ActionOptions.GET_CURRENT_CHAT,
+        }
+        return new Promise((resolve) => {
+            const resolveId = (chatId: string | undefined) => resolve(chatId);
+            FrontMessager.listenMessage(requireCurrentChatResponse, resolveId);
+        })
+    }
+
     private updateChatState() {
         setInterval(async () => {
-            const requireCurrentChat: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.GET_CURRENT_CHAT,
-            }
-            FrontMessager.sendMessage(requireCurrentChat);
-
-            const requireCurrentChatResponse: InternalMessageMetadata = {
-                from: AgentOptions.INJECTED,
-                to: AgentOptions.CONTENT,
-                action: ActionOptions.GET_CURRENT_CHAT,
-            }
-
-            FrontMessager.listenMessage(requireCurrentChatResponse, (payload: string | undefined) => {
-                const contactId = payload;
-                const isSingleContact = !!contactId;
-                const isNewChat = contactId !== this.currentChatId;
-                if (isNewChat) {
-                    if (isSingleContact) {
-                        this.currentChatId = contactId;
-                        this.currentChatButton = this.attachInitAuditableChatButton();
-                    } else {
-                        this.currentChatId = null;
-                        this.currentChatButton = null;
-                        this.lastChatMessage = null;
-                    }
-                };
-            });
+            const contactId = await this.searchCurrentChat();
+            const isSingleContact = !!contactId;
+            const isNewChat = contactId !== this.currentChatId;
+            if (isNewChat) {
+                if (isSingleContact) {
+                    this.currentChatId = contactId;
+                    this.currentChatButton = this.attachInitAuditableChatButton();
+                } else {
+                    this.currentChatId = null;
+                    this.currentChatButton = null;
+                    this.lastChatMessage = null;
+                }
+            };
 
             if (this.currentChatId === null) return;
 
@@ -198,6 +209,18 @@ class DomProcessor {
             });
 
             this.updateButtonState();
+
+            const isAuditable = this.auditableChats.has(this.currentChatId as string);
+            if (!isAuditable) return;
+
+            const sendMessageBackground: InternalMessage = {
+                from: AgentOptions.CONTENT,
+                to: AgentOptions.BACKGROUND,
+                action: ActionOptions.SEND_MESSAGE_TO_BACKGROUND,
+                payload: this.lastChatMessage
+            }
+            console.log("Sending message to background")
+            FrontChromeMessager.sendMessage(sendMessageBackground)
             // 3. Else if it is instanciate pass to background to process (just console by now)
         }, 1000);
     }
