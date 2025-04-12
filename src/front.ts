@@ -9,11 +9,9 @@ class DomProcessor {
     private currentChatId: string | null;
     private currentChatButton: HTMLDivElement | null;
     private auditableChats: Set<string>;
-    private lastChatMessage: chatMessage | null;
     constructor() {
         this.currentChatId = null;
         this.currentChatButton = null;
-        this.lastChatMessage = null;
         this.auditableChats = new Set([]);
 
         this.updateChatState();
@@ -45,8 +43,8 @@ class DomProcessor {
     }
 
     // Só posso chamar essa função se tiver certeza que já estou num chat auditável
-    private updateButtonState(): void {
-        const [lastMessage, lastMessageAuthorId] = [this.lastChatMessage?.content as string, this.lastChatMessage?.author as string];
+    private updateButtonState(lastChatMessage: chatMessage): void {
+        const [lastMessage, lastMessageAuthorId] = [lastChatMessage.content, lastChatMessage.author];
         const isAuditable = this.auditableChats.has(this.currentChatId as string);
         const lastMessageIsRequest = lastMessage === AuditableChatOptions.REQUEST;
         const lastMessageAuthorIsMe = lastMessageAuthorId !== this.currentChatId;
@@ -165,7 +163,7 @@ class DomProcessor {
         })
     }
 
-    private getLastMessage(chatId: string): Promise<chatMessage> {
+    private getLastChatMessage(chatId: string): Promise<chatMessage> {
         const requireLastMessage: InternalMessage = {
             from: AgentOptions.CONTENT,
             to: AgentOptions.INJECTED,
@@ -202,15 +200,14 @@ class DomProcessor {
                 } else {
                     this.currentChatId = null;
                     this.currentChatButton = null;
-                    this.lastChatMessage = null;
                 }
             };
 
             if (this.currentChatId === null) return;
 
-            this.lastChatMessage = await this.getLastMessage(this.currentChatId)
+            const lastChatMessage = await this.getLastChatMessage(this.currentChatId)
 
-            this.updateButtonState();
+            this.updateButtonState(lastChatMessage);
 
             const isAuditable = this.auditableChats.has(this.currentChatId as string);
             if (!isAuditable) return;
@@ -219,7 +216,7 @@ class DomProcessor {
                 from: AgentOptions.CONTENT,
                 to: AgentOptions.BACKGROUND,
                 action: ActionOptions.SEND_MESSAGE_TO_BACKGROUND,
-                payload: this.lastChatMessage
+                payload: lastChatMessage
             }
             console.log("Sending message to background")
             FrontChromeMessager.sendMessage(sendMessageBackground)
