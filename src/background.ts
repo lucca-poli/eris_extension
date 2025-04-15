@@ -1,5 +1,5 @@
 import { ChromeMessager } from "./utils/InternalMessager";
-import { ActionOptions, AgentOptions, InternalMessageMetadata } from "./utils/types";
+import { ActionOptions, AgentOptions, chatMessage, InternalMessageMetadata } from "./utils/types";
 
 const BackChromeMessager = new ChromeMessager(AgentOptions.CONTENT, AgentOptions.BACKGROUND);
 
@@ -9,6 +9,6 @@ const lastMessageBackground: InternalMessageMetadata = {
     to: AgentOptions.BACKGROUND,
     action: ActionOptions.SEND_MESSAGE_TO_BACKGROUND,
 }
-BackChromeMessager.listenMessage(lastMessageBackground, (payload: any) => {
-    console.log("payload arrived: ", payload)
+BackChromeMessager.listenMessage(lastMessageBackground, (incomingMessage: chatMessage) => {
+    console.log("payload arrived: ", incomingMessage)
 })

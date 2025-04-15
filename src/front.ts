@@ -43,19 +43,20 @@ class DomProcessor {
     }
 
     // Só posso chamar essa função se tiver certeza que já estou num chat auditável
-    private updateButtonState(lastChatMessage: chatMessage): void {
-        const [lastMessage, lastMessageAuthorId] = [lastChatMessage.content, lastChatMessage.author];
+    private async updateButtonState(): Promise<void> {
+        if (this.currentChatId === null) return;
+        const { content: lastMessage, author: lastMessageAuthorId } = await this.getLastChatMessage(this.currentChatId);
         const isAuditable = this.auditableChats.has(this.currentChatId as string);
         const lastMessageIsRequest = lastMessage === AuditableChatOptions.REQUEST;
         const lastMessageAuthorIsMe = lastMessageAuthorId !== this.currentChatId;
-        console.log("isAuditable: ", isAuditable)
-        console.log("lastMessage: ", lastMessage)
-        console.log("lastMessageIsRequest: ", lastMessageIsRequest)
-        console.log("lastMessageAuthorIsMe: ", lastMessageAuthorIsMe)
+        //console.log("isAuditable: ", isAuditable)
+        //console.log("lastMessage: ", lastMessage)
+        //console.log("lastMessageIsRequest: ", lastMessageIsRequest)
+        //console.log("lastMessageAuthorIsMe: ", lastMessageAuthorIsMe)
 
         //@ts-ignore
         this.currentChatButton?.innerHTML = '';
-        console.log(this.auditableChats)
+        //console.log(this.auditableChats)
 
         if (isAuditable) {
             if (lastMessage === AuditableChatOptions.END) {
@@ -133,16 +134,18 @@ class DomProcessor {
         }
     }
 
-    private processIncomingChatMessage(): void {
-        const newMessage: InternalMessageMetadata = {
-            from: AgentOptions.INJECTED,
-            to: AgentOptions.CONTENT,
-            action: ActionOptions.RECEIVED_NEW_MESSAGE,
-        }
-        FrontMessager.listenMessage(newMessage, (incomingMessage: chatMessage) => {
-            console.log("new message arrived: ", incomingMessage);
-        })
-    }
+    //private processIncomingChatMessage(): void {
+    //    const newMessage: InternalMessageMetadata = {
+    //        from: AgentOptions.INJECTED,
+    //        to: AgentOptions.CONTENT,
+    //        action: ActionOptions.RECEIVED_NEW_MESSAGE,
+    //    }
+    //    FrontMessager.listenMessage(newMessage, (incomingMessage: chatMessage) => {
+    //        console.log("new message arrived: ", incomingMessage);
+    //    })
+    //
+    //    // se o chat for auditavel, mando pra background, se não, mando atualizar o state do chat com base na mensagem
+    //}
 
     private searchCurrentChat(): Promise<string | undefined> {
         const requireCurrentChat: InternalMessage = {
@@ -182,7 +185,6 @@ class DomProcessor {
                 if (lastMessage.content === undefined || lastMessage.author === undefined) {
                     throw new Error(`Couldn't read last message in chat: ${this.currentChatId}`)
                 };
-
                 resolve(lastMessage);
             });
         });
@@ -204,10 +206,9 @@ class DomProcessor {
             };
 
             if (this.currentChatId === null) return;
-
             const lastChatMessage = await this.getLastChatMessage(this.currentChatId)
 
-            this.updateButtonState(lastChatMessage);
+            this.updateButtonState();
 
             const isAuditable = this.auditableChats.has(this.currentChatId as string);
             if (!isAuditable) return;
@@ -218,9 +219,8 @@ class DomProcessor {
                 action: ActionOptions.SEND_MESSAGE_TO_BACKGROUND,
                 payload: lastChatMessage
             }
-            console.log("Sending message to background")
             FrontChromeMessager.sendMessage(sendMessageBackground)
-            // 3. Else if it is instanciate pass to background to process (just console by now)
+            //3. Else if it is instanciate pass to background to process (just console by now)
         }, 1000);
     }
 

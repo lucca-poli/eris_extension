@@ -18,25 +18,19 @@ InjectedMessager.listenMessage(denyAuditableButtonClicked, (payload: string) => 
     WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.DENY);
 })
 
-const newMessageArrived: InternalMessage = {
-    from: AgentOptions.INJECTED,
-    to: AgentOptions.CONTENT,
-    action: ActionOptions.RECEIVED_NEW_MESSAGE,
-}
-WhatsappLayer.on('chat.new_message', async (chatMessage) => {
-    //console.log('New message received:', chatMessage);
-    const arrivedMessage: chatMessage = {
-        content: chatMessage.body as string,
-        author: chatMessage.from?._serialized as string,
-    }
-    const response: InternalMessage = {
-        from: AgentOptions.INJECTED,
-        to: AgentOptions.CONTENT,
-        action: ActionOptions.RECEIVED_NEW_MESSAGE,
-        payload: arrivedMessage
-    }
-    InjectedMessager.sendMessage(response);
-});
+//WhatsappLayer.on('chat.new_message', async (chatMessage) => {
+//    const arrivedMessage: chatMessage = {
+//        content: chatMessage.body as string,
+//        author: chatMessage.from?._serialized as string,
+//    }
+//    const response: InternalMessage = {
+//        from: AgentOptions.INJECTED,
+//        to: AgentOptions.CONTENT,
+//        action: ActionOptions.RECEIVED_NEW_MESSAGE,
+//        payload: arrivedMessage
+//    }
+//    InjectedMessager.sendMessage(response);
+//});
 
 const acceptAuditableButtonClicked: InternalMessageMetadata = {
     from: AgentOptions.CONTENT,
@@ -73,7 +67,6 @@ const getLastMessageFilter: InternalMessageMetadata = {
 InjectedMessager.listenMessage(getLastMessageFilter, async (payload: string) => {
     const chatMessages = await WhatsappLayer.chat.getMessages(payload, { count: 1 });
     const lastMessage = chatMessages[0];
-    //console.log("last message: ", lastMessage)
 
     const lastChatMessage: chatMessage = {
         content: lastMessage.body as string,
