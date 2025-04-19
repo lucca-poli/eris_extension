@@ -4,6 +4,9 @@
   "version": "1.0",
   "permissions": ["scripting", "activeTab"],
   "manifest_version": 3,
+  "host_permissions": [
+    "https://web.whatsapp.com/*"
+  ],
   "background": {
     "service_worker": "js/background.js"
   },

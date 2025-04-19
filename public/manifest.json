@@ -4,14 +4,16 @@
   "version": "1.0",
   "permissions": ["scripting", "activeTab"],
   "manifest_version": 3,
+  "host_permissions": [
+    "https://web.whatsapp.com/*"
+  ],
   "background": {
     "service_worker": "js/background.js"
   },
   "content_scripts": [
     {
       "matches": ["https://web.whatsapp.com/*"],
-      "js": ["js/front.js"],
-      "run_at": "document_start"
+      "js": ["js/front.js"]
     },
     {
       "js": ["js/injected_api.js"],
@@ -30,3 +32,4 @@
     }
   ]
 }
+

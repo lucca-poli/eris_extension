@@ -138,11 +138,12 @@ export class ChromeMessager {
 
     sendMessage(internalMessage: InternalMessage, responseCallback?: (response: any) => void): void {
         chrome.runtime.sendMessage(internalMessage, (response) => {
-            if (response && responseCallback) responseCallback(response)
+            //console.log("arrived response: ", response)
+            if (responseCallback) responseCallback(response)
         })
     }
 
-    listenMessage(filter: InternalMessageMetadata, callback: (data: any) => any): void {
+    listenMessage(filter: InternalMessageMetadata, callback: (data: any) => Promise<any>): void {
         const chromeCallback = (message: InternalMessage, _sender: any, sendResponse: Function) => {
             const matchesFilter =
                 message.from === filter.from &&
@@ -153,9 +154,12 @@ export class ChromeMessager {
             (async () => {
                 try {
                     // Await the callback response
+                    //console.log("1")
                     const response = await callback(message);
+                    //console.log("2: ", response)
                     // Send the response (or null if no response)
                     sendResponse(response || null);
+                    //console.log("3")
                 } catch (error) {
                     console.error("Error in async callback:", error);
                     sendResponse({ error: "Error processing request" });

@@ -81,6 +81,16 @@ InjectedMessager.listenMessage(getLastMessageFilter, async (payload: string) => 
     InjectedMessager.sendMessage(sendResponse);
 })
 
+
+const responseCleanInputBox: InternalMessageMetadata = {
+    from: AgentOptions.CONTENT,
+    to: AgentOptions.INJECTED,
+    action: ActionOptions.CLEAN_INPUT_TEXT_BOX
+};
+InjectedMessager.listenMessage(responseCleanInputBox, (chatId: string) => {
+    WhatsappLayer.chat.setInputText('', chatId);
+})
+
 const currentChat: InternalMessageMetadata = {
     from: AgentOptions.CONTENT,
     to: AgentOptions.INJECTED,

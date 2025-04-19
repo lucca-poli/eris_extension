@@ -190,6 +190,91 @@ class DomProcessor {
         });
     }
 
+    private setupMessageInterception(): void {
+        console.log("trying to attach remove text listeners")
+        const chatId = this.currentChatId;
+        if (chatId === null) {
+            console.log("chatId is null");
+            return;
+        };
+
+        function getInputWrapper(): Element | null {
+            const matches = document.querySelectorAll('p.selectable-text.copyable-text');
+            console.log("got input wrapper: ", matches[matches.length - 1])
+            return matches[matches.length - 1];
+        }
+        // Function to get current input text
+        function getInputText(): string | null {
+            // Find the input wrapper
+            const inputWrapper = getInputWrapper()
+            if (!inputWrapper) return null;
+
+            // Find span with text inside the wrapper
+            const textSpan: HTMLElement | null = inputWrapper?.children[0] as HTMLElement;
+
+            // If we found the span, return its content, otherwise the input is empty
+            return textSpan ? textSpan.textContent?.trim() || '' : '';
+        }
+
+        // Function to clear the input box
+        function clearInputBox(): void {
+            const requestCleanInputBox: InternalMessage = {
+                from: AgentOptions.CONTENT,
+                to: AgentOptions.INJECTED,
+                action: ActionOptions.CLEAN_INPUT_TEXT_BOX,
+                payload: chatId
+            };
+            FrontMessager.sendMessage(requestCleanInputBox);
+        }
+
+        // Function to handle message sending
+        function handleSendAttempt(): void {
+            const inputText: string | null = getInputText();
+
+            // Only process if there's text in the input
+            if (inputText && inputText.length > 0) {
+                // Process the input text (replace this with your actual processing)
+                processInput(inputText);
+
+                // Clear the input box after processing
+                clearInputBox();
+            }
+        }
+
+        // Dummy process function (replace with your actual implementation)
+        function processInput(text: string): void {
+            console.log('Processing input text:', text);
+            // Your actual processing logic would go here
+        }
+
+        // Watch for send button clicks
+        const sendButton: Element | null = document.querySelector('button[data-tab="11"]');
+        const buttonListener = (ev: MouseEvent) => {
+            // Look for the send button
+            ev.preventDefault();
+            ev.stopPropagation();
+            //ev.stopPropagation();
+            if (sendButton) {
+                handleSendAttempt();
+            }
+        }
+        document.removeEventListener("click", buttonListener)
+        document.addEventListener('click', buttonListener);
+
+        // Watch for Enter key presses (without Shift)
+        const enterListener = (event: KeyboardEvent) => {
+            console.log("which key was pressed: ", event.key);
+            if (event.key === 'Enter' && !event.shiftKey) {
+                // Check if we're currently focused on the input field
+                // Prevent the default Enter behavior
+                event.preventDefault();
+                handleSendAttempt();
+            }
+        };
+        document.removeEventListener("keydown", enterListener)
+        document.addEventListener('keydown', enterListener);
+    }
+
     private updateChatState() {
         setInterval(async () => {
             const contactId = await this.searchCurrentChat();
@@ -199,6 +284,7 @@ class DomProcessor {
                 if (isSingleContact) {
                     this.currentChatId = contactId;
                     this.currentChatButton = this.attachInitAuditableChatButton();
+                    this.setupMessageInterception()
                 } else {
                     this.currentChatId = null;
                     this.currentChatButton = null;
@@ -219,7 +305,9 @@ class DomProcessor {
                 action: ActionOptions.SEND_MESSAGE_TO_BACKGROUND,
                 payload: lastChatMessage
             }
-            FrontChromeMessager.sendMessage(sendMessageBackground)
+            FrontChromeMessager.sendMessage(sendMessageBackground, (response: string) => {
+                console.log("content of the message: ", response)
+            })
             //3. Else if it is instanciate pass to background to process (just console by now)
         }, 1000);
     }
