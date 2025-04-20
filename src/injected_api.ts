@@ -9,15 +9,6 @@ const WhatsappLayer: typeof WPP = window.WPP;
 const InjectedWindowMessager = new WindowMessager(AgentOptions.INJECTED, AgentOptions.CONTENT);
 const InjectedMessager = new InternalMessager([InjectedWindowMessager]);
 
-const denyAuditableButtonClicked: InternalMessageMetadata = {
-    from: AgentOptions.CONTENT,
-    to: AgentOptions.INJECTED,
-    action: ActionOptions.REQUEST_DENY_AUDITABLE_BUTTON_CLICKED
-};
-InjectedMessager.listenMessage(denyAuditableButtonClicked, (payload: string) => {
-    WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.DENY);
-})
-
 //WhatsappLayer.on('chat.new_message', async (chatMessage) => {
 //    const arrivedMessage: chatMessage = {
 //        content: chatMessage.body as string,
@@ -31,33 +22,6 @@ InjectedMessager.listenMessage(denyAuditableButtonClicked, (payload: string) => 
 //    }
 //    InjectedMessager.sendMessage(response);
 //});
-
-const acceptAuditableButtonClicked: InternalMessageMetadata = {
-    from: AgentOptions.CONTENT,
-    to: AgentOptions.INJECTED,
-    action: ActionOptions.REQUEST_ACCEPT_AUDITABLE_BUTTON_CLICKED
-};
-InjectedMessager.listenMessage(acceptAuditableButtonClicked, (payload: string) => {
-    WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.ACCEPT);
-})
-
-const endAuditableButtonClicked: InternalMessageMetadata = {
-    from: AgentOptions.CONTENT,
-    to: AgentOptions.INJECTED,
-    action: ActionOptions.REQUEST_END_AUDITABLE_BUTTON_CLICKED
-};
-InjectedMessager.listenMessage(endAuditableButtonClicked, (payload: string) => {
-    WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.END);
-})
-
-const auditableButtonClicked: InternalMessageMetadata = {
-    from: AgentOptions.CONTENT,
-    to: AgentOptions.INJECTED,
-    action: ActionOptions.REQUEST_AUDITABLE_BUTTON_CLICKED
-};
-InjectedMessager.listenMessage(auditableButtonClicked, (payload: string) => {
-    WhatsappLayer.chat.sendTextMessage(payload, AuditableChatOptions.REQUEST);
-})
 
 const getLastMessageFilter: InternalMessageMetadata = {
     from: AgentOptions.CONTENT,
@@ -81,7 +45,6 @@ InjectedMessager.listenMessage(getLastMessageFilter, async (payload: string) => 
     InjectedMessager.sendMessage(sendResponse);
 })
 
-
 const responseCleanInputBox: InternalMessageMetadata = {
     from: AgentOptions.CONTENT,
     to: AgentOptions.INJECTED,
@@ -91,22 +54,3 @@ InjectedMessager.listenMessage(responseCleanInputBox, (chatId: string) => {
     WhatsappLayer.chat.setInputText('', chatId);
 })
 
-const currentChat: InternalMessageMetadata = {
-    from: AgentOptions.CONTENT,
-    to: AgentOptions.INJECTED,
-    action: ActionOptions.GET_CURRENT_CHAT
-};
-InjectedMessager.listenMessage(currentChat, () => {
-    const activeChat = WhatsappLayer.chat.getActiveChat();
-
-    const currentChatResponse: InternalMessage = {
-        from: AgentOptions.INJECTED,
-        to: AgentOptions.CONTENT,
-        action: ActionOptions.GET_CURRENT_CHAT,
-        payload: undefined
-    }
-    if (activeChat?.isUser) {
-        currentChatResponse.payload = activeChat.id._serialized;
-    }
-    InjectedMessager.sendMessage(currentChatResponse);
-})

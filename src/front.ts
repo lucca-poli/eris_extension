@@ -1,4 +1,4 @@
-import { ActionOptions, AgentOptions, AuditableChatOptions, chatMessage, InternalMessage, InternalMessageMetadata } from "./utils/types"
+import { ActionOptions, AgentOptions, AuditableChatOptions, chatMessage, InternalMessage, InternalMessageMetadata, InternalMessageV2, SendMessage } from "./utils/types"
 import { InternalMessager, WindowMessager, ChromeMessager } from "./utils/InternalMessager";
 
 const FrontWindowMessager = new WindowMessager(AgentOptions.CONTENT, AgentOptions.INJECTED);
@@ -68,14 +68,14 @@ class DomProcessor {
             // @ts-ignore
             endAuditableButton.innerText = "🔲";
 
-            const sendEndMessage: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.REQUEST_END_AUDITABLE_BUTTON_CLICKED,
-                payload: this.currentChatId
-            };
             endAuditableButton.addEventListener("click", () => {
-                FrontMessager.sendMessage(sendEndMessage);
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_TEXT_MESSAGE,
+                    payload: {
+                        message: AuditableChatOptions.END,
+                        chatId: this.currentChatId
+                    } as SendMessage
+                } as InternalMessageV2)
                 this.auditableChats.delete(this.currentChatId as string);
             });
 
@@ -87,14 +87,14 @@ class DomProcessor {
             // @ts-ignore
             requireAuditableButton.innerText = "🔲";
 
-            const sendRequestMessage: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.REQUEST_AUDITABLE_BUTTON_CLICKED,
-                payload: this.currentChatId
-            };
             requireAuditableButton.addEventListener("click", () => {
-                FrontMessager.sendMessage(sendRequestMessage);
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_TEXT_MESSAGE,
+                    payload: {
+                        message: AuditableChatOptions.REQUEST,
+                        chatId: this.currentChatId
+                    } as SendMessage
+                } as InternalMessageV2);
             });
 
             this.currentChatButton?.appendChild(requireAuditableButton);
@@ -108,25 +108,25 @@ class DomProcessor {
             const denyAuditableButton = this.createBaseButton("button", 46) as HTMLButtonElement;
             denyAuditableButton.innerText = "❌";
 
-            const sendAcceptMessage: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.REQUEST_ACCEPT_AUDITABLE_BUTTON_CLICKED,
-                payload: this.currentChatId
-            };
             acceptAuditableButton.addEventListener("click", () => {
-                FrontMessager.sendMessage(sendAcceptMessage);
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_TEXT_MESSAGE,
+                    payload: {
+                        chatId: this.currentChatId,
+                        message: AuditableChatOptions.ACCEPT
+                    } as SendMessage
+                } as InternalMessageV2);
                 this.auditableChats.add(this.currentChatId as string);
             });
 
-            const sendDenyMessage: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.REQUEST_DENY_AUDITABLE_BUTTON_CLICKED,
-                payload: this.currentChatId
-            };
             denyAuditableButton.addEventListener("click", () => {
-                FrontMessager.sendMessage(sendDenyMessage);
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_TEXT_MESSAGE,
+                    payload: {
+                        chatId: this.currentChatId,
+                        message: AuditableChatOptions.DENY
+                    } as SendMessage
+                } as InternalMessageV2);
             });
 
             this.currentChatButton?.appendChild(denyAuditableButton);
@@ -148,21 +148,11 @@ class DomProcessor {
     //}
 
     private searchCurrentChat(): Promise<string | undefined> {
-        const requireCurrentChat: InternalMessage = {
-            from: AgentOptions.CONTENT,
-            to: AgentOptions.INJECTED,
-            action: ActionOptions.GET_CURRENT_CHAT,
-        }
-        FrontMessager.sendMessage(requireCurrentChat);
-
-        const requireCurrentChatResponse: InternalMessageMetadata = {
-            from: AgentOptions.INJECTED,
-            to: AgentOptions.CONTENT,
-            action: ActionOptions.GET_CURRENT_CHAT,
-        }
         return new Promise((resolve) => {
             const resolveId = (chatId: string | undefined) => resolve(chatId);
-            FrontMessager.listenMessage(requireCurrentChatResponse, resolveId);
+            chrome.runtime.sendMessage({
+                action: ActionOptions.GET_CURRENT_CHAT
+            } as InternalMessageV2, resolveId);
         })
     }
 

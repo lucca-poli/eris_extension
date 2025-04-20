@@ -1,20 +1,10 @@
 import { ChromeMessager } from "./utils/InternalMessager";
-import { ActionOptions, AgentOptions, chatMessage, InternalMessageMetadata } from "./utils/types";
-import "@wppconnect/wa-js"
-import WPP from "@wppconnect/wa-js"
-
-// @ts-ignore
-const WhatsappLayer: typeof WPP = window.WPP;
+import { ActionOptions, AgentOptions, chatMessage, InternalMessageMetadata, InternalMessageV2, SendMessage } from "./utils/types";
+import { sendTextMessage, getCurrentTab, getCurrentChat } from "./utils/chrome_lib"
 
 const BackChromeMessager = new ChromeMessager(AgentOptions.CONTENT, AgentOptions.BACKGROUND);
 
 console.log("background loaded");
-let tabId: number;
-(async () => {
-    // @ts-ignore
-    tabId = await chrome.tabs.query({ active: true, currentWindow: true })[0].id;
-    console.log("this is tab", tabId)
-})();
 
 const lastMessageBackground: InternalMessageMetadata = {
     from: AgentOptions.CONTENT,
@@ -26,36 +16,36 @@ BackChromeMessager.listenMessage(lastMessageBackground, (incomingMessage: chatMe
     (async () => {
         const tabId = (await getCurrentTab()).id as number;
         console.log("this is tab", tabId)
-        const func = await injectScript(tabId, (name: string));
-        console.log("variable found: ", v);
+        const response = await sendTextMessage(tabId, "5513991570735@c.us", "oiiiiii, to testando");
+        console.log("response found: ", response);
     })();
     return new Promise((resolve) => resolve(incomingMessage.content));
 })
 
-async function sendTextMessage(chatId: string, message: string) {
-    const func = (chatId: string, message: string) => {
-        WhatsappLayer.chat.sendTextMessage(chatId, message);
-    };
-    const [{ result }] = await chrome.scripting.executeScript({
-        // @ts-ignore
-        func: func(chatId, message),
-        args: [chatId, message],
-        target: {
-            tabId: (await getCurrentTab()).id as number
-        },
-        world: 'MAIN',
-    });
-    const scripts = await chrome.scripting.getRegisteredContentScripts();
-    const scriptIds = scripts.map(script => script.id);
-    chrome.scripting.unregisterContentScripts({ ids: scriptIds });
-    return result;
-}
+chrome.runtime.onMessage.addListener((internalMessage: InternalMessageV2, _sender, sendResponse) => {
+    if (internalMessage.action !== ActionOptions.SEND_TEXT_MESSAGE) return;
 
-async function getCurrentTab(): Promise<chrome.tabs.Tab> {
-    let queryOptions = { active: true, lastFocusedWindow: true };
-    // `tab` will either be a `tabs.Tab` instance or `undefined`.
-    const [tab] = await chrome.tabs.query(queryOptions);
-    if (tab === undefined) throw new Error("Fatal: couldn't fetch current Tab.");
-    return tab;
-}
+    (async () => {
+        const tabId = (await getCurrentTab()).id as number;
+        const { chatId, message } = internalMessage.payload as SendMessage;
+        const messageReturn = await sendTextMessage(tabId, chatId, message);
+        // Cannot send complex objects
+        sendResponse(messageReturn?.id);
+    })();
 
+    return true;
+});
+
+chrome.runtime.onMessage.addListener((internalMessage: InternalMessageV2, _sender, sendResponse) => {
+    if (internalMessage.action !== ActionOptions.GET_CURRENT_CHAT) return;
+
+    (async () => {
+        const tabId = (await getCurrentTab()).id as number;
+        const messageReturn = await getCurrentChat(tabId);
+        // Cannot send complex objects
+        console.log("got current chat: ", messageReturn);
+        sendResponse(messageReturn?.id._serialized);
+    })();
+
+    return true;
+});
