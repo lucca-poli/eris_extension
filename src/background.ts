@@ -1,6 +1,6 @@
 import { ChromeMessager } from "./utils/InternalMessager";
 import { ActionOptions, AgentOptions, chatMessage, InternalMessageMetadata, InternalMessageV2, SendMessage } from "./utils/types";
-import { sendTextMessage, getCurrentTab, getCurrentChat } from "./utils/chrome_lib"
+import { sendTextMessage, getCurrentTab, getCurrentChat, getLastChatMessage } from "./utils/chrome_lib"
 
 const BackChromeMessager = new ChromeMessager(AgentOptions.CONTENT, AgentOptions.BACKGROUND);
 
@@ -41,10 +41,23 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessageV2, _sende
 
     (async () => {
         const tabId = (await getCurrentTab()).id as number;
-        const messageReturn = await getCurrentChat(tabId);
+        const currentChatId = await getCurrentChat(tabId);
         // Cannot send complex objects
-        console.log("got current chat: ", messageReturn);
-        sendResponse(messageReturn?.id._serialized);
+        sendResponse(currentChatId)
+    })();
+
+    return true;
+});
+
+chrome.runtime.onMessage.addListener((internalMessage: InternalMessageV2, _sender, sendResponse) => {
+    if (internalMessage.action !== ActionOptions.GET_LAST_CHAT_MESSAGE) return;
+
+    (async () => {
+        const tabId = (await getCurrentTab()).id as number;
+        const chatId = internalMessage.payload as string;
+        const lastChatMessage = await getLastChatMessage(tabId, chatId);
+        // Cannot send complex objects
+        sendResponse(lastChatMessage)
     })();
 
     return true;

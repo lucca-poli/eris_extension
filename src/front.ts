@@ -157,26 +157,11 @@ class DomProcessor {
     }
 
     private getLastChatMessage(chatId: string): Promise<chatMessage> {
-        const requireLastMessage: InternalMessage = {
-            from: AgentOptions.CONTENT,
-            to: AgentOptions.INJECTED,
-            action: ActionOptions.GET_LAST_CHAT_MESSAGE,
-            payload: chatId
-        };
-        FrontMessager.sendMessage(requireLastMessage);
-
-        const requireLastMessageResponse: InternalMessageMetadata = {
-            from: AgentOptions.INJECTED,
-            to: AgentOptions.CONTENT,
-            action: ActionOptions.GET_LAST_CHAT_MESSAGE,
-        };
         return new Promise((resolve) => {
-            FrontMessager.listenMessage(requireLastMessageResponse, (lastMessage: chatMessage) => {
-                if (lastMessage.content === undefined || lastMessage.author === undefined) {
-                    throw new Error(`Couldn't read last message in chat: ${this.currentChatId}`)
-                };
-                resolve(lastMessage);
-            });
+            chrome.runtime.sendMessage({
+                action: ActionOptions.GET_LAST_CHAT_MESSAGE,
+                payload: chatId
+            } as InternalMessageV2, (lastMessage: chatMessage) => resolve(lastMessage))
         });
     }
 
@@ -208,13 +193,7 @@ class DomProcessor {
 
         // Function to clear the input box
         function clearInputBox(): void {
-            const requestCleanInputBox: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.CLEAN_INPUT_TEXT_BOX,
-                payload: chatId
-            };
-            FrontMessager.sendMessage(requestCleanInputBox);
+            console.log("lets pretend the inputBox was cleaned, it will be replaced with my own input Box inserted into DOM")
         }
 
         // Function to handle message sending
