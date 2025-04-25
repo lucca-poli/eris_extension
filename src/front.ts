@@ -1,9 +1,4 @@
-import { ActionOptions, AgentOptions, AuditableChatOptions, chatMessage, InternalMessage, InternalMessageMetadata } from "./utils/types"
-import { InternalMessager, WindowMessager, ChromeMessager } from "./utils/InternalMessager";
-
-const FrontWindowMessager = new WindowMessager(AgentOptions.CONTENT, AgentOptions.INJECTED);
-const FrontChromeMessager = new ChromeMessager(AgentOptions.CONTENT, AgentOptions.BACKGROUND);
-const FrontMessager = new InternalMessager([FrontWindowMessager]);
+import { ActionOptions, AuditableChatOptions, ChatMessage, InternalMessage, SendMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatId: string | null;
@@ -68,14 +63,14 @@ class DomProcessor {
             // @ts-ignore
             endAuditableButton.innerText = "🔲";
 
-            const sendEndMessage: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.REQUEST_END_AUDITABLE_BUTTON_CLICKED,
-                payload: this.currentChatId
-            };
             endAuditableButton.addEventListener("click", () => {
-                FrontMessager.sendMessage(sendEndMessage);
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_TEXT_MESSAGE,
+                    payload: {
+                        message: AuditableChatOptions.END,
+                        chatId: this.currentChatId
+                    } as SendMessage
+                } as InternalMessage)
                 this.auditableChats.delete(this.currentChatId as string);
             });
 
@@ -87,14 +82,14 @@ class DomProcessor {
             // @ts-ignore
             requireAuditableButton.innerText = "🔲";
 
-            const sendRequestMessage: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.REQUEST_AUDITABLE_BUTTON_CLICKED,
-                payload: this.currentChatId
-            };
             requireAuditableButton.addEventListener("click", () => {
-                FrontMessager.sendMessage(sendRequestMessage);
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_TEXT_MESSAGE,
+                    payload: {
+                        message: AuditableChatOptions.REQUEST,
+                        chatId: this.currentChatId
+                    } as SendMessage
+                } as InternalMessage);
             });
 
             this.currentChatButton?.appendChild(requireAuditableButton);
@@ -108,25 +103,25 @@ class DomProcessor {
             const denyAuditableButton = this.createBaseButton("button", 46) as HTMLButtonElement;
             denyAuditableButton.innerText = "❌";
 
-            const sendAcceptMessage: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.REQUEST_ACCEPT_AUDITABLE_BUTTON_CLICKED,
-                payload: this.currentChatId
-            };
             acceptAuditableButton.addEventListener("click", () => {
-                FrontMessager.sendMessage(sendAcceptMessage);
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_TEXT_MESSAGE,
+                    payload: {
+                        chatId: this.currentChatId,
+                        message: AuditableChatOptions.ACCEPT
+                    } as SendMessage
+                } as InternalMessage);
                 this.auditableChats.add(this.currentChatId as string);
             });
 
-            const sendDenyMessage: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.REQUEST_DENY_AUDITABLE_BUTTON_CLICKED,
-                payload: this.currentChatId
-            };
             denyAuditableButton.addEventListener("click", () => {
-                FrontMessager.sendMessage(sendDenyMessage);
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_TEXT_MESSAGE,
+                    payload: {
+                        chatId: this.currentChatId,
+                        message: AuditableChatOptions.DENY
+                    } as SendMessage
+                } as InternalMessage);
             });
 
             this.currentChatButton?.appendChild(denyAuditableButton);
@@ -140,7 +135,7 @@ class DomProcessor {
     //        to: AgentOptions.CONTENT,
     //        action: ActionOptions.RECEIVED_NEW_MESSAGE,
     //    }
-    //    FrontMessager.listenMessage(newMessage, (incomingMessage: chatMessage) => {
+    //    FrontMessager.listenMessage(newMessage, (incomingMessage: ChatMessage) => {
     //        console.log("new message arrived: ", incomingMessage);
     //    })
     //
@@ -148,45 +143,23 @@ class DomProcessor {
     //}
 
     private searchCurrentChat(): Promise<string | undefined> {
-        const requireCurrentChat: InternalMessage = {
-            from: AgentOptions.CONTENT,
-            to: AgentOptions.INJECTED,
-            action: ActionOptions.GET_CURRENT_CHAT,
-        }
-        FrontMessager.sendMessage(requireCurrentChat);
-
-        const requireCurrentChatResponse: InternalMessageMetadata = {
-            from: AgentOptions.INJECTED,
-            to: AgentOptions.CONTENT,
-            action: ActionOptions.GET_CURRENT_CHAT,
-        }
         return new Promise((resolve) => {
             const resolveId = (chatId: string | undefined) => resolve(chatId);
-            FrontMessager.listenMessage(requireCurrentChatResponse, resolveId);
+            chrome.runtime.sendMessage({
+                action: ActionOptions.GET_CURRENT_CHAT
+            } as InternalMessage, resolveId);
         })
     }
 
-    private getLastChatMessage(chatId: string): Promise<chatMessage> {
-        const requireLastMessage: InternalMessage = {
-            from: AgentOptions.CONTENT,
-            to: AgentOptions.INJECTED,
-            action: ActionOptions.GET_LAST_CHAT_MESSAGE,
-            payload: chatId
-        };
-        FrontMessager.sendMessage(requireLastMessage);
-
-        const requireLastMessageResponse: InternalMessageMetadata = {
-            from: AgentOptions.INJECTED,
-            to: AgentOptions.CONTENT,
-            action: ActionOptions.GET_LAST_CHAT_MESSAGE,
-        };
+    private getLastChatMessage(chatId: string): Promise<ChatMessage> {
         return new Promise((resolve) => {
-            FrontMessager.listenMessage(requireLastMessageResponse, (lastMessage: chatMessage) => {
-                if (lastMessage.content === undefined || lastMessage.author === undefined) {
-                    throw new Error(`Couldn't read last message in chat: ${this.currentChatId}`)
-                };
+            chrome.runtime.sendMessage({
+                action: ActionOptions.GET_LAST_CHAT_MESSAGE,
+                payload: chatId
+            } as InternalMessage, (lastMessage: ChatMessage) => {
+                console.log("got lastMessage: ", lastMessage)
                 resolve(lastMessage);
-            });
+            })
         });
     }
 
@@ -218,13 +191,7 @@ class DomProcessor {
 
         // Function to clear the input box
         function clearInputBox(): void {
-            const requestCleanInputBox: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.INJECTED,
-                action: ActionOptions.CLEAN_INPUT_TEXT_BOX,
-                payload: chatId
-            };
-            FrontMessager.sendMessage(requestCleanInputBox);
+            console.log("lets pretend the inputBox was cleaned, it will be replaced with my own input Box inserted into DOM")
         }
 
         // Function to handle message sending
@@ -299,15 +266,10 @@ class DomProcessor {
             const isAuditable = this.auditableChats.has(this.currentChatId as string);
             if (!isAuditable) return;
 
-            const sendMessageBackground: InternalMessage = {
-                from: AgentOptions.CONTENT,
-                to: AgentOptions.BACKGROUND,
-                action: ActionOptions.SEND_MESSAGE_TO_BACKGROUND,
+            chrome.runtime.sendMessage({
+                action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
                 payload: lastChatMessage
-            }
-            FrontChromeMessager.sendMessage(sendMessageBackground, (response: string) => {
-                console.log("content of the message: ", response)
-            })
+            } as InternalMessage);
             //3. Else if it is instanciate pass to background to process (just console by now)
         }, 1000);
     }
@@ -315,12 +277,3 @@ class DomProcessor {
 }
 
 const domProcessorRepository = new DomProcessor();
-
-const windowMessageRepeaterFilter: InternalMessageMetadata = {
-    from: AgentOptions.INJECTED,
-    to: AgentOptions.CONTENT,
-    action: ActionOptions.REPASS_INTERNAL_MESSAGE
-};
-FrontMessager.listenMessage(windowMessageRepeaterFilter, (payload: InternalMessage) => {
-    FrontMessager.sendMessage(payload);
-})
