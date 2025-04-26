@@ -1,6 +1,19 @@
 import { ChatMessage } from "./types";
 import WPP from "@wppconnect/wa-js"
 
+export function setInputbox(tabId: number, message: string) {
+    chrome.scripting.executeScript({
+        func: (message) => {
+            // @ts-ignore
+            const WhatsappLayer: typeof WPP = window.WPP;
+            WhatsappLayer.chat.setInputText(message);
+        },
+        args: [message],
+        target: { tabId },
+        world: 'MAIN',
+    });
+}
+
 export async function sendTextMessage(tabId: number, chatId: string, message: string) {
     const [{ result }] = await chrome.scripting.executeScript({
         func: (chatId, message) => {

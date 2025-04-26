@@ -1,7 +1,17 @@
 import { ActionOptions, InternalMessage, SendMessage } from "./utils/types";
-import { sendTextMessage, getCurrentTab, getCurrentChat, getLastChatMessage } from "./utils/chrome_lib"
+import { sendTextMessage, getCurrentTab, getCurrentChat, getLastChatMessage, setInputbox } from "./utils/chrome_lib"
 
 console.log("background loaded");
+
+chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
+    if (internalMessage.action !== ActionOptions.SET_INPUT_BOX) return;
+
+    const message = internalMessage.payload as string;
+    (async () => {
+        const tabId = (await getCurrentTab()).id as number;
+        setInputbox(tabId, message);
+    })();
+})
 
 chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
     if (internalMessage.action !== ActionOptions.PROCESS_AUDITABLE_MESSAGE) return;
@@ -10,8 +20,6 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
     (async () => {
         const tabId = (await getCurrentTab()).id as number;
         console.log("this is tab", tabId)
-        const response = await sendTextMessage(tabId, "5513991570735@c.us", "oiiiiii, to testando");
-        console.log("response found: ", response);
     })();
 })
 
