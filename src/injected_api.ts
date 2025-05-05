@@ -1,15 +1,19 @@
 import "@wppconnect/wa-js"
+import WPP from "@wppconnect/wa-js"
+import { ActionOptions, InternalMessage, AuditableMessage } from "./utils/types";
 
-//WhatsappLayer.on('chat.new_message', async (chatMessage) => {
-//    const arrivedMessage: chatMessage = {
-//        content: chatMessage.body as string,
-//        author: chatMessage.from?._serialized as string,
-//    }
-//    const response: InternalMessage = {
-//        from: AgentOptions.INJECTED,
-//        to: AgentOptions.CONTENT,
-//        action: ActionOptions.RECEIVED_NEW_MESSAGE,
-//        payload: arrivedMessage
-//    }
-//    InjectedMessager.sendMessage(response);
-//});
+// @ts-ignore
+const WhatsappLayer: typeof WPP = window.WPP;
+
+WhatsappLayer.on('chat.new_message', async (chatMessage) => {
+    const arrivedMessage: AuditableMessage = {
+        content: chatMessage.body as string,
+        chatId: chatMessage.from?._serialized as string,
+        authorIsMe: chatMessage.id.fromMe,
+        hash: chatMessage.description,
+    };
+    window.postMessage({
+        action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
+        payload: arrivedMessage,
+    } as InternalMessage, "*");
+});

@@ -1,4 +1,4 @@
-import { ChatMessage } from "./types";
+import { ChatMessage, SendMessage } from "./types";
 import WPP from "@wppconnect/wa-js"
 
 export function setInputbox(tabId: number, message: string) {
@@ -14,12 +14,18 @@ export function setInputbox(tabId: number, message: string) {
     });
 }
 
-export async function sendTextMessage(tabId: number, chatId: string, message: string) {
+export async function sendTextMessage(tabId: number, chatMessage: SendMessage) {
+    const { chatId, message, hash } = chatMessage;
     const [{ result }] = await chrome.scripting.executeScript({
         func: (chatId, message) => {
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
-            return WhatsappLayer.chat.sendTextMessage(chatId, message);
+            return WhatsappLayer.chat.sendTextMessage(chatId, message, {
+                // @ts-ignore: talvez de merda depois ignorar esse erro
+                linkPreview: {
+                    description: hash,
+                }
+            });
         },
         args: [chatId, message],
         target: { tabId },

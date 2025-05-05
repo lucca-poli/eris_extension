@@ -16,15 +16,11 @@ Vou coletar todos os boleanos que preciso a cada iteração do loop
 Atualizo o botão e mando mensagens pro back processar se preciso
 
 # Refinement Pool
-- Refatorar o comunicador para injeções de scripts com a api scripting
-- Capturar o Input e processar
-- Mudar a arquitetura de processamento de menssagens para uma máquina de estados
-    - Coletar as mensagens discretamente com .on("message") e salvar o estado de todo chat que não for normal
-- Comunicador interno
-    - Montar o from e to dentro da classe, de acordo com o dono, o protocolo e se é send ou listen
-    - Implementar response
-- Fazer logger e botar no comunicador
-- Retirar o botão se chat auditável já foi requisitado
+- Trocar o SendMessage por ChatMessage
+- Mudar a arquitetura de processamento de menssagens e do estado do chat para algo discreto (por meio de eventos)
+    - Usar evento de chat ativo ao inves de loop
+    - Salvar o estado de todo chat que não for normal
+- Fazer logger
 - Passar o armazenamento de conversas para o cliente (localmente)
 - Adicionar path no tsconfig
 
@@ -33,3 +29,7 @@ Atualizo o botão e mando mensagens pro back processar se preciso
 - Se o request não ficar como enviado ele não fica como sendo a ultima mensagem, então um usuário pode clicar várias vezes no botão de requisitar e fica meio paia
 - Conversa não vira auditável se o outro lado aceitar
 - O cara pode só apagar a conversa até um request anterior e aceitar, botar um timeout pra cada request
+
+# Architural decisions
+
+- Ignoring possibility of a message not correctly processed (por agora eu ignorei a fila de processamento de mensagens)

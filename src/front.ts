@@ -1,4 +1,4 @@
-import { ActionOptions, AuditableChatOptions, ChatMessage, InternalMessage, SendMessage } from "./utils/types"
+import { ActionOptions, AuditableChatOptions, AuditableMessage, ChatMessage, InternalMessage, SendMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatId: string | null;
@@ -125,19 +125,6 @@ class DomProcessor {
         }
     }
 
-    //private processIncomingChatMessage(): void {
-    //    const newMessage: InternalMessageMetadata = {
-    //        from: AgentOptions.INJECTED,
-    //        to: AgentOptions.CONTENT,
-    //        action: ActionOptions.RECEIVED_NEW_MESSAGE,
-    //    }
-    //    FrontMessager.listenMessage(newMessage, (incomingMessage: ChatMessage) => {
-    //        console.log("new message arrived: ", incomingMessage);
-    //    })
-    //
-    //    // se o chat for auditavel, mando pra background, se não, mando atualizar o state do chat com base na mensagem
-    //}
-
     private searchCurrentChat(): Promise<string | undefined> {
         return new Promise((resolve) => {
             const resolveId = (chatId: string | undefined) => resolve(chatId);
@@ -158,7 +145,7 @@ class DomProcessor {
         });
     }
 
-    private createCustomInputbox(holderText: string, originalText: string | undefined) {
+    private createCustomInputbox(holderText: string, originalText: string | undefined, chatId: string) {
         const parentElement = document.createElement('div');
         parentElement.classList.add("x1n2onr6", "xh8yej3", "xjdcl3y", "lexical-rich-text-input");
 
@@ -232,8 +219,21 @@ class DomProcessor {
 
         customInput.addEventListener('keydown', function(e) {
             if (e.key === 'Backspace' && auditableChatbox?.textContent?.length === 0) e.preventDefault();
-        });
 
+            if (e.key === 'Enter' && !e.shiftKey) {
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
+                    payload: {
+                        content: auditableChatbox.textContent,
+                        chatId,
+                        authorIsMe: true
+                    } as AuditableMessage,
+                } as InternalMessage);
+
+                auditableChatbox.innerHTML = '<br>';
+                if (!parentElement.contains(placeHolderParent)) parentElement.appendChild(placeHolderParent);
+            }
+        });
         return parentElement;
     }
 
@@ -248,7 +248,7 @@ class DomProcessor {
             payload: ''
         } as InternalMessage);
 
-        const customInput = this.createCustomInputbox(holderText, originalText);
+        const customInput = this.createCustomInputbox(holderText, originalText, this.currentChatId as string);
 
         originalChatbox?.replaceWith(customInput);
     }
@@ -271,19 +271,26 @@ class DomProcessor {
             };
 
             if (this.currentChatId === null) return;
-            const lastChatMessage = await this.getLastChatMessage(this.currentChatId)
+            //const lastChatMessage = await this.getLastChatMessage(this.currentChatId)
 
             this.updateButtonState();
 
             if (!isAuditable) return;
 
-            chrome.runtime.sendMessage({
-                action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
-                payload: lastChatMessage
-            } as InternalMessage);
+            //chrome.runtime.sendMessage({
+            //    action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
+            //    payload: lastChatMessage
+            //} as InternalMessage);
         }, 1000);
     }
 
 }
 
 const domProcessorRepository = new DomProcessor();
+
+window.addEventListener("message", (event: MessageEvent) => {
+    const internalMessage: InternalMessage = event.data;
+    if (internalMessage.action !== ActionOptions.PROCESS_AUDITABLE_MESSAGE) return;
+
+    chrome.runtime.sendMessage(internalMessage);
+})

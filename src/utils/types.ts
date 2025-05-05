@@ -21,11 +21,19 @@ export type InternalMessage = {
 
 export type SendMessage = {
     chatId: string,
-    message: string
+    message: string,
+    hash?: string,
 }
 
 export type ChatMessage = {
     content: string,
     author: string
 };
+
+export type AuditableMessage = {
+    chatId: string,
+    content?: string,
+    authorIsMe: boolean,
+    hash?: string,
+}
 
