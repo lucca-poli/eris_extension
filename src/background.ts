@@ -1,5 +1,6 @@
-import { ActionOptions, InternalMessage, AuditableMessage, SendMessage } from "./utils/types";
-import { sendTextMessage, getCurrentTab, getCurrentChat, getLastChatMessage, setInputbox } from "./utils/chrome_lib"
+
+import { ActionOptions, InternalMessage, AuditableMessage } from "./utils/types";
+import { sendTextMessage, getCurrentTab, getLastChatMessage, setInputbox } from "./utils/chrome_lib"
 
 console.log("background loaded");
 
@@ -44,7 +45,7 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
 
         (async () => {
             const tabId = (await getCurrentTab()).id as number;
-            await sendTextMessage(tabId, internalMessage.payload as SendMessage);
+            await sendTextMessage(tabId, arrivedMessage);
         })();
     } else {
         auditableChat.updateHash(arrivedMessage.hash as string)
@@ -68,22 +69,10 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender,
 
     (async () => {
         const tabId = (await getCurrentTab()).id as number;
-        const messageReturn = await sendTextMessage(tabId, internalMessage.payload as SendMessage);
+        const messageReturn = await sendTextMessage(tabId, internalMessage.payload as AuditableMessage);
+        console.log("Message return: ", messageReturn)
         // Cannot send complex objects
         sendResponse(messageReturn?.id);
-    })();
-
-    return true;
-});
-
-chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender, sendResponse) => {
-    if (internalMessage.action !== ActionOptions.GET_CURRENT_CHAT) return;
-
-    (async () => {
-        const tabId = (await getCurrentTab()).id as number;
-        const currentChatId = await getCurrentChat(tabId);
-        // Cannot send complex objects
-        sendResponse(currentChatId)
     })();
 
     return true;

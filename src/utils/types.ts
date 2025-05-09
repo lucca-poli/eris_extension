@@ -1,6 +1,6 @@
 export enum ActionOptions {
+    PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     GET_LAST_CHAT_MESSAGE = "GET_LAST_CHAT_MESSAGE",
-    GET_CURRENT_CHAT = "GET_CURRENT_CHAT",
     SET_INPUT_BOX = "SET_INPUT_BOX",
     SEND_TEXT_MESSAGE = "SEND_TEXT_MESSAGE",
     PROCESS_AUDITABLE_MESSAGE = "PROCESS_AUDITABLE_MESSAGE",
@@ -12,6 +12,13 @@ export enum AuditableChatOptions {
     ACCEPT = "Auditable conversation accepted.",
     DENY = "Auditable conversation denied.",
     END = "Auditable conversation ended. Logs available in popup."
+};
+
+export enum AuditableChatStates {
+    REQUEST_SENT,
+    REQUEST_RECEIVED,
+    ONGOING,
+    IDLE
 };
 
 export type InternalMessage = {
@@ -29,6 +36,13 @@ export type ChatMessage = {
     content: string,
     author: string
 };
+
+export type ChatMessageV2 = {
+    content: string,
+    authorIsMe: boolean,
+    hash?: string,
+}
+
 
 export type AuditableMessage = {
     chatId: string,

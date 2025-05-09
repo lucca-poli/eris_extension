@@ -1,4 +1,4 @@
-import { ChatMessage, SendMessage } from "./types";
+import { AuditableMessage, ChatMessage } from "./types";
 import WPP from "@wppconnect/wa-js"
 
 export function setInputbox(tabId: number, message: string) {
@@ -14,35 +14,30 @@ export function setInputbox(tabId: number, message: string) {
     });
 }
 
-export async function sendTextMessage(tabId: number, chatMessage: SendMessage) {
-    const { chatId, message, hash } = chatMessage;
+export async function sendTextMessage(tabId: number, chatMessage: AuditableMessage) {
+    const { chatId, content } = chatMessage;
+    let { hash } = chatMessage;
+    if (!hash) hash = '';
+    console.log("Trying to send message: ")
+    console.log("chatId: ", chatId)
+    console.log("content: ", content)
+    console.log("hash: ", hash)
     const [{ result }] = await chrome.scripting.executeScript({
-        func: (chatId, message) => {
+        func: (chatId, content, hash) => {
+            console.log("trying to send message: ", content);
+            console.log("message with hash: ", hash);
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
-            return WhatsappLayer.chat.sendTextMessage(chatId, message, {
+
+            if (hash) return WhatsappLayer.chat.sendTextMessage(chatId, content, {
                 // @ts-ignore: talvez de merda depois ignorar esse erro
                 linkPreview: {
                     description: hash,
                 }
             });
+            return WhatsappLayer.chat.sendTextMessage(chatId, content);
         },
-        args: [chatId, message],
-        target: { tabId },
-        world: 'MAIN',
-    });
-    return result;
-}
-
-export async function getCurrentChat(tabId: number) {
-    const [{ result }] = await chrome.scripting.executeScript({
-        func: () => {
-            // @ts-ignore
-            const WhatsappLayer: typeof WPP = window.WPP;
-            const activeChat = WhatsappLayer.chat.getActiveChat();
-            if (activeChat?.isUser) return activeChat?.id._serialized;
-            return undefined;
-        },
+        args: [chatId, content, hash],
         target: { tabId },
         world: 'MAIN',
     });
