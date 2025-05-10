@@ -229,10 +229,13 @@ class DomProcessor {
             }
         });
 
-        customInput.addEventListener('keydown', function(e) {
+        customInput.addEventListener('keydown', (e) => {
             if (e.key === 'Backspace' && auditableChatbox?.textContent?.length === 0) e.preventDefault();
 
             if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (auditableChatbox?.textContent?.length === 0) return; // do nothing on messages with no text
+
                 chrome.runtime.sendMessage({
                     action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
                     payload: {
@@ -242,8 +245,9 @@ class DomProcessor {
                     } as AuditableMessage,
                 } as InternalMessage);
 
-                auditableChatbox.innerHTML = '<br>';
-                if (!parentElement.contains(placeHolderParent)) parentElement.appendChild(placeHolderParent);
+                // @ts-ignore
+                auditableChatbox?.textContent = '';
+                this.setupChatbox(chatId);
             }
         });
         return parentElement;
