@@ -1,6 +1,12 @@
-
 import { ActionOptions, InternalMessage, AuditableMessage } from "./utils/types";
 import { sendTextMessage, getCurrentTab, getLastChatMessage, setInputbox } from "./utils/chrome_lib"
+
+chrome.commands.onCommand.addListener((shortcut) => {
+    if (shortcut === "reload") {
+        console.log("Reloaded extension!");
+        chrome.runtime.reload();
+    }
+})
 
 console.log("background loaded");
 

@@ -38,11 +38,15 @@ export default {
     },
     watch: true,
     watchOptions: {
-        ignored: ['/node_modules', '/dist']
+        ignored: ['../node_modules', '../dist']
     },
     plugins: [
         new CopyPlugin({
-            patterns: [{ from: '.', to: '..', context: '../public/' }]
+            patterns: [{
+                from: path.resolve(__dirname, 'public', 'manifest.json'),
+                to: path.resolve(__dirname, 'dist', 'manifest.json'),
+                force: true,
+            }]
         })
     ]
 };

@@ -2,7 +2,7 @@
   "name": "Hello Extensions",
   "description": "Base Level Extension",
   "version": "1.0",
-  "permissions": ["scripting", "activeTab", "tabs"],
+  "permissions": ["scripting", "activeTab", "tabs", "commands"],
   "manifest_version": 3,
   "host_permissions": [
     "https://web.whatsapp.com/*"
@@ -30,6 +30,14 @@
       "matches": ["https://web.whatsapp.com/*"],
       "resources": ["js/injected_api.js", "js/front.js" ]
     }
-  ]
+  ],
+  "commands": {
+    "reload": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "Reload the extension"
+    }
+  }
 }
-
