@@ -18,14 +18,8 @@ export async function sendTextMessage(tabId: number, chatMessage: AuditableMessa
     const { chatId, content } = chatMessage;
     let { hash } = chatMessage;
     if (!hash) hash = '';
-    console.log("Trying to send message: ")
-    console.log("chatId: ", chatId)
-    console.log("content: ", content)
-    console.log("hash: ", hash)
     const [{ result }] = await chrome.scripting.executeScript({
         func: (chatId, content, hash) => {
-            console.log("trying to send message: ", content);
-            console.log("message with hash: ", hash);
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
 

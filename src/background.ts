@@ -50,8 +50,6 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
     } else {
         auditableChat.updateHash(arrivedMessage.hash as string)
     }
-
-    console.log("last hash: ", auditableChat.lastHash);
 });
 
 chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {

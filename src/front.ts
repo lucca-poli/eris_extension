@@ -36,6 +36,8 @@ class AuditableChat {
             default:
                 throw new Error(`Unexpected State in conversation: ${this.currentState}`)
         }
+
+        console.log("New state: ", this.currentState)
     }
 
     getCurrentState() {
@@ -79,8 +81,6 @@ class DomProcessor {
     }
 
     updateButtonState(currentState: AuditableChatStates, chatId: string): void {
-        console.log("Current original auditable is: ", currentAuditableChat)
-        console.log("Current auditable is: ", chatId)
         //@ts-ignore
         this.currentChatButton?.innerHTML = '';
 
@@ -109,7 +109,6 @@ class DomProcessor {
             requireAuditableButton.innerText = "🔲";
 
             requireAuditableButton.addEventListener("click", () => {
-                console.log("Button clicked, chatId is: ", chatId)
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
@@ -202,7 +201,6 @@ class DomProcessor {
         }
 
         customInput.addEventListener('input', function() {
-            console.log("current text: ", auditableChatbox.textContent);
             if (auditableChatbox.textContent?.trim() === '') {
                 auditableChatbox.innerHTML = '<br>';
                 if (!parentElement.contains(placeHolderParent)) parentElement.appendChild(placeHolderParent);
@@ -273,7 +271,7 @@ const domProcessorRepository = new DomProcessor();
 
 window.addEventListener("message", (event: MessageEvent) => {
     const internalMessage: InternalMessage = event.data;
-    if (internalMessage.action !== ActionOptions.PROCESS_AUDITABLE_MESSAGE) return;
+    if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
     const incomingChatMessage = internalMessage.payload as AuditableMessage;
     const { chatId, ...chatMessage } = incomingChatMessage;
@@ -293,9 +291,9 @@ window.addEventListener("message", (event: MessageEvent) => {
     if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_CHAT) return;
 
     const chat: string = internalMessage.payload;
-    console.log("new chat event with id: ", chat)
+    if (currentAuditableChat && currentAuditableChat.getCurrentState() === AuditableChatStates.IDLE) auditableChats.delete(currentAuditableChat.getCurrentChat());
+
     const auditableChat = auditableChats.get(chat)
-    if (currentAuditableChat && currentAuditableChat.getCurrentState() === AuditableChatStates.IDLE) auditableChats.delete(chat);
     if (auditableChat) {
         currentAuditableChat = auditableChat;
     } else {
@@ -307,7 +305,8 @@ window.addEventListener("message", (event: MessageEvent) => {
     domProcessorRepository.attachInitAuditableChatButton();
     domProcessorRepository.updateButtonState(currentAuditableChat.getCurrentState(), currentAuditableChat.getCurrentChat());
 
-    console.log("Current auditable is: ", currentAuditableChat)
+    console.log("Current auditable after event: ", currentAuditableChat)
+    console.log("From auditableChats after event: ", auditableChats)
 
     //chrome.runtime.sendMessage(internalMessage);
 });

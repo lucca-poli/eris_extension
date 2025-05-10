@@ -8,7 +8,7 @@ const WhatsappLayer: typeof WPP = window.WPP;
 WhatsappLayer.on('chat.new_message', async (chatMessage) => {
     const arrivedMessage: AuditableMessage = {
         content: chatMessage.body as string,
-        chatId: chatMessage.from?._serialized as string,
+        chatId: chatMessage.id?.remote?._serialized as string,
         authorIsMe: chatMessage.id.fromMe,
         hash: chatMessage.description,
     };
@@ -19,7 +19,7 @@ WhatsappLayer.on('chat.new_message', async (chatMessage) => {
     if (!arrivedMessage.authorIsMe) throw new Error(`New message has no author: ${arrivedMessage}`);
 
     window.postMessage({
-        action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
+        action: ActionOptions.PROPAGATE_NEW_MESSAGE,
         payload: arrivedMessage,
     } as InternalMessage, "*");
 });

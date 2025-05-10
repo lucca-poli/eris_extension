@@ -1,5 +1,6 @@
 export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
+    PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
     GET_LAST_CHAT_MESSAGE = "GET_LAST_CHAT_MESSAGE",
     SET_INPUT_BOX = "SET_INPUT_BOX",
     SEND_TEXT_MESSAGE = "SEND_TEXT_MESSAGE",
@@ -15,10 +16,10 @@ export enum AuditableChatOptions {
 };
 
 export enum AuditableChatStates {
-    REQUEST_SENT,
-    REQUEST_RECEIVED,
-    ONGOING,
-    IDLE
+    REQUEST_SENT = "REQUEST_SENT",
+    REQUEST_RECEIVED = "REQUEST_RECEIVED",
+    ONGOING = "ONGOING",
+    IDLE = "IDLE"
 };
 
 export type InternalMessage = {
