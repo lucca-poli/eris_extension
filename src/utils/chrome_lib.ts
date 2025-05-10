@@ -48,17 +48,12 @@ export async function getLastChatMessage(tabId: number, chatId: string) {
 
                 WhatsappLayer.chat.getMessages(chatId, { count: 1 })
                     .then((messages) => {
-                        console.log("Got messages:", messages);
                         const lastMessage = messages[0];
 
                         if (!lastMessage) {
-                            console.log("No messages found");
                             resolve(null);
                             return;
                         }
-
-                        console.log("Last message body:", lastMessage.body);
-                        console.log("Last message from:", lastMessage.from?._serialized);
 
                         const lastChatMessage = {
                             content: lastMessage.body,

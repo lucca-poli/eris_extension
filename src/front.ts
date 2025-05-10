@@ -80,7 +80,7 @@ class DomProcessor {
         this.currentChatButton = auditableButton;
     }
 
-    updateButtonState(currentState: AuditableChatStates, chatId: string): void {
+    private updateButtonState(currentState: AuditableChatStates, chatId: string): void {
         //@ts-ignore
         this.currentChatButton?.innerHTML = '';
 
@@ -268,6 +268,11 @@ class DomProcessor {
 
         originalChatbox?.replaceWith(customInput);
     }
+
+    updateChatState(currentState: AuditableChatStates, chatId: string) {
+        this.updateButtonState(currentState, chatId);
+        if (currentState === AuditableChatStates.ONGOING) this.setupChatbox(chatId);
+    }
 }
 
 let currentAuditableChat: AuditableChat | null = null;
@@ -284,7 +289,7 @@ window.addEventListener("message", (event: MessageEvent) => {
     if (auditableChat) auditableChat.updateState(chatMessage as ChatMessageV2)
 
     if (currentAuditableChat && currentAuditableChat.getCurrentChat() === chatId) {
-        domProcessorRepository.updateButtonState(currentAuditableChat.getCurrentState(), currentAuditableChat.getCurrentChat());
+        domProcessorRepository.updateChatState(currentAuditableChat.getCurrentState(), currentAuditableChat.getCurrentChat());
     }
 
     chrome.runtime.sendMessage(internalMessage);
@@ -307,10 +312,7 @@ window.addEventListener("message", (event: MessageEvent) => {
     }
 
     domProcessorRepository.attachInitAuditableChatButton();
-    domProcessorRepository.updateButtonState(currentAuditableChat.getCurrentState(), currentAuditableChat.getCurrentChat());
-
-    console.log("Current auditable after event: ", currentAuditableChat)
-    console.log("From auditableChats after event: ", auditableChats)
+    domProcessorRepository.updateChatState(currentAuditableChat.getCurrentState(), currentAuditableChat.getCurrentChat());
 
     //chrome.runtime.sendMessage(internalMessage);
 });
