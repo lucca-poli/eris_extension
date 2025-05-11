@@ -44,6 +44,9 @@ export type ChatMessageV2 = {
     hash?: string,
 }
 
+export type ChatState = {
+    currentState: AuditableChatStates
+}
 
 export type AuditableMessage = {
     chatId: string,

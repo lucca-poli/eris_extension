@@ -2,7 +2,7 @@
   "name": "Hello Extensions",
   "description": "Base Level Extension",
   "version": "1.0",
-  "permissions": ["scripting", "activeTab", "tabs", "commands"],
+  "permissions": ["storage", "scripting", "activeTab", "tabs", "commands"],
   "manifest_version": 3,
   "host_permissions": [
     "https://web.whatsapp.com/*"

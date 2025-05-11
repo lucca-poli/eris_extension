@@ -16,12 +16,9 @@ Vou coletar todos os boleanos que preciso a cada iteração do loop
 Atualizo o botão e mando mensagens pro back processar se preciso
 
 # Refinement Pool
-- Trocar o SendMessage por ChatMessage
-- Mudar a arquitetura de processamento de menssagens e do estado do chat para algo discreto (por meio de eventos)
-    - Usar evento de chat ativo ao inves de loop
-    - Salvar o estado de todo chat que não for normal
-- Fazer logger
 - Passar o armazenamento de conversas para o cliente (localmente)
+    - Adicionar botão para apagar todos os chats no popup para fins de debug
+- Fazer logger
 - Adicionar path no tsconfig
 
 # Bugs
