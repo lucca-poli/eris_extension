@@ -76,11 +76,3 @@ export async function getLastChatMessage(tabId: number, chatId: string) {
     return result as ChatMessage | null;
 }
 
-export async function getCurrentTab() {
-    let queryOptions = { active: true, lastFocusedWindow: true };
-    // `tab` will either be a `tabs.Tab` instance or `undefined`.
-    const [tab] = await chrome.tabs.query(queryOptions);
-    if (tab === undefined) throw new Error("Fatal: couldn't fetch current Tab.");
-    return tab;
-}
-

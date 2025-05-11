@@ -26,8 +26,7 @@ Atualizo o botão e mando mensagens pro back processar se preciso
 
 # Bugs
 
-- Se o request não ficar como enviado ele não fica como sendo a ultima mensagem, então um usuário pode clicar várias vezes no botão de requisitar e fica meio paia
-- Conversa não vira auditável se o outro lado aceitar
+- Se ficar muito tempo sem mexer no browser ele fica como idle e a api storage para de funcionar, então se o usuario receber uma mensagem de requisição, aceite, deny ou end isso não fica registrado
 - O cara pode só apagar a conversa até um request anterior e aceitar, botar um timeout pra cada request
 
 # Architural decisions
