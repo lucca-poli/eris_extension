@@ -31,6 +31,10 @@
       "resources": ["js/injected_api.js", "js/front.js" ]
     }
   ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Chat Auditor Debug"
+  },
   "commands": {
     "reload": {
       "suggested_key": {

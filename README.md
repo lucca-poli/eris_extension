@@ -16,8 +16,7 @@ Vou coletar todos os boleanos que preciso a cada iteração do loop
 Atualizo o botão e mando mensagens pro back processar se preciso
 
 # Refinement Pool
-- Passar o armazenamento de conversas para o cliente (localmente)
-    - Adicionar botão para apagar todos os chats no popup para fins de debug
+- Mudar a referencia da ultima mensagem em conversa auditavel de armazenamento em ram para armazenamento da referencia em disco (pelo Id da mensagem que aceitou a conversa auditavel e o contador de quantas mensagens auditaveis foram processadas)
 - Fazer logger
 - Adicionar path no tsconfig
 

@@ -1,4 +1,4 @@
-import { ActionOptions, InternalMessage, AuditableMessage } from "./utils/types";
+import { ActionOptions, InternalMessage, AuditableMessage, ChatState, AuditableChatStates } from "./utils/types";
 import { sendTextMessage, getLastChatMessage, setInputbox } from "./utils/chrome_lib"
 
 // Tab manager - Manages current whatsapp web session
@@ -57,20 +57,21 @@ console.log("background loaded");
 class AuditableChat {
     lastHash: string;
     private chatId: string;
+    static STORAGE_KEY = 'chats';
 
     constructor(chatId: string) {
-        this.lastHash = this.initAuditableChat();
         this.chatId = chatId;
+        this.lastHash = this.initAuditableChat();
     };
 
     private initAuditableChat() {
         const initialization_process = "init_";
+        console.log("Starting auditable chat: ", this.chatId)
         return initialization_process;
     };
 
     calculateHash(messageToProcess: string) {
-        const newHash = messageToProcess + "_";
-        this.updateHash(newHash);
+        const newHash = this.lastHash + messageToProcess.trim() + "_";
         return newHash;
     }
 
@@ -81,11 +82,39 @@ class AuditableChat {
 
 const auditableChats: Map<string, AuditableChat> = new Map([]);
 
+chrome.storage.onChanged.addListener((changes) => {
+    console.log("Changes: ", changes)
+    const entries = Object.entries(changes) as [string, {
+        oldValue?: Record<string, ChatState>,
+        newValue?: Record<string, ChatState>,
+    }][];
+    for (const [key, { oldValue, newValue }] of entries) {
+        if (key !== AuditableChat.STORAGE_KEY || !oldValue || !newValue) continue;
+
+        console.log("Old state: ", oldValue)
+        console.log("New state: ", newValue)
+        const oldChatIds = Object.keys(oldValue);
+        const newChatIds = Object.keys(newValue);
+        const chatIds = Array.from(new Set([...oldChatIds, ...newChatIds]));
+
+        chatIds.forEach((chatId) => {
+            const oldState = oldValue[chatId]?.currentState;
+            const newState = newValue[chatId]?.currentState;
+
+            const oldStateIsRequest = oldState === AuditableChatStates.REQUEST_SENT || oldState === AuditableChatStates.REQUEST_RECEIVED;
+            console.log("Old state: ", oldState)
+            console.log("New state: ", newState)
+            if (oldStateIsRequest && newState === AuditableChatStates.ONGOING) auditableChats.set(chatId, new AuditableChat(chatId));
+        });
+    }
+})
+
 chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
     if (internalMessage.action !== ActionOptions.PROCESS_AUDITABLE_MESSAGE) return;
 
     // Se for uma string é uma mensagem do usuário e devo processar, se não a mensagem vem de fora
     const arrivedMessage = internalMessage.payload as AuditableMessage;
+    console.log("Message to process: ", arrivedMessage);
 
     let auditableChat = auditableChats.get(arrivedMessage.chatId)
     if (!auditableChat) auditableChat = new AuditableChat(arrivedMessage.chatId);
@@ -97,9 +126,8 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
             const tabId = tabManager.getWhatsappTab().id as number;
             await sendTextMessage(tabId, arrivedMessage);
         })();
-    } else {
-        auditableChat.updateHash(arrivedMessage.hash as string)
     }
+    auditableChat.updateHash(arrivedMessage.hash as string)
 });
 
 chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
@@ -118,7 +146,6 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender,
     (async () => {
         const tabId = tabManager.getWhatsappTab().id as number;
         const messageReturn = await sendTextMessage(tabId, internalMessage.payload as AuditableMessage);
-        console.log("Message return: ", messageReturn)
         // Cannot send complex objects
         sendResponse(messageReturn?.id);
     })();

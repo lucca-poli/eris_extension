@@ -13,7 +13,8 @@ export default {
     entry: {
         "injected_api": "./injected_api.ts",
         "front": "./front.ts",
-        "background": "./background.ts"
+        "background": "./background.ts",
+        "popup": "./popup.ts"
     },
     output: {
         filename: "[name].js",
@@ -43,8 +44,8 @@ export default {
     plugins: [
         new CopyPlugin({
             patterns: [{
-                from: path.resolve(__dirname, 'public', 'manifest.json'),
-                to: path.resolve(__dirname, 'dist', 'manifest.json'),
+                from: path.resolve(__dirname, 'public/'),
+                to: path.resolve(__dirname, 'dist/'),
                 force: true,
             }]
         })

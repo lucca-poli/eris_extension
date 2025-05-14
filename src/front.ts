@@ -1,6 +1,6 @@
 import { ActionOptions, AuditableChatOptions, AuditableChatStates, AuditableMessage, InternalMessage, ChatMessageV2, ChatState } from "./utils/types"
 
-class AuditableChat {
+export class AuditableChat {
     private chatId: string;
     private currentState: AuditableChatStates;
     private static STORAGE_KEY = 'chats';
@@ -35,8 +35,6 @@ class AuditableChat {
             default:
                 throw new Error(`Unexpected State in conversation: ${this.currentState}`)
         }
-
-        console.log("New state: ", this.currentState)
     }
 
     getCurrentState() {
@@ -322,20 +320,22 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const auditableState = (await AuditableChat.getAuditable(chatId))?.currentState;
     const auditableChat = new AuditableChat(chatId, auditableState);
     auditableChat.updateState(chatMessage as ChatMessageV2);
-    console.log("State read: ", auditableState);
-    console.log("New state read: ", auditableState);
     const stateChanged = auditableChat.getCurrentState() !== auditableState;
-    if (stateChanged && auditableState) AuditableChat.setAuditable(chatId, {
-        currentState: auditableChat.getCurrentState()
-    });
+    if (stateChanged || auditableState) {
+        AuditableChat.setAuditable(chatId, {
+            currentState: auditableChat.getCurrentState()
+        });
+        currentAuditableChat = auditableChat;
+    }
 
     if (currentAuditableChat && currentAuditableChat.getCurrentChat() === chatId) {
         domProcessorRepository.updateChatState(currentAuditableChat.getCurrentState(), currentAuditableChat.getCurrentChat());
     }
 
-    console.log("Current chats: ", await AuditableChat.getAll())
-
-    chrome.runtime.sendMessage(internalMessage);
+    if (!incomingChatMessage.authorIsMe && incomingChatMessage.hash) chrome.runtime.sendMessage({
+        action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
+        payload: incomingChatMessage,
+    } as InternalMessage);
 });
 
 window.addEventListener("message", async (event: MessageEvent) => {
@@ -343,8 +343,9 @@ window.addEventListener("message", async (event: MessageEvent) => {
     if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_CHAT) return;
 
     const chatId: string = internalMessage.payload;
-    console.log("new chatId: ", chatId)
-    if (currentAuditableChat && currentAuditableChat.getCurrentState() === AuditableChatStates.IDLE) await AuditableChat.removeAuditable(chatId);
+    if (currentAuditableChat && currentAuditableChat.getCurrentState() === AuditableChatStates.IDLE) {
+        await AuditableChat.removeAuditable(currentAuditableChat.getCurrentChat());
+    }
 
     const auditableState = await AuditableChat.getAuditable(chatId);
     const auditableChat = new AuditableChat(chatId, auditableState?.currentState);
@@ -355,8 +356,6 @@ window.addEventListener("message", async (event: MessageEvent) => {
 
     domProcessorRepository.attachInitAuditableChatButton();
     domProcessorRepository.updateChatState(currentAuditableChat.getCurrentState(), currentAuditableChat.getCurrentChat());
-
-    console.log("Current chats: ", await AuditableChat.getAll())
 
     //chrome.runtime.sendMessage(internalMessage);
 });
