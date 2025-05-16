@@ -16,7 +16,6 @@ WhatsappLayer.on('chat.new_message', async (chatMessage) => {
 
     if (!chatMessage?.from?.isUser()) return;
     if (!arrivedMessage.chatId) throw new Error(`New message has no message: ${arrivedMessage}`);
-    if (!arrivedMessage.content) throw new Error(`New message has no content: ${arrivedMessage}`);
 
     window.postMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,

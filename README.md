@@ -16,10 +16,10 @@ Vou coletar todos os boleanos que preciso a cada iteração do loop
 Atualizo o botão e mando mensagens pro back processar se preciso
 
 # Refinement Pool
-- Unificar os AuditableChat no back
+- mudar o authorIsMe pra author
+- adicionar timestamp
+- Criar 2 tipos de mensagem. Um sendo a mensagem que eu crio e vou botar um hash em seguida e a outra sendo a que vem do whatsapp
 - Mudar os auditable chats pro disco ao invés da RAM
-- Mudar a referencia da ultima mensagem em conversa auditavel de armazenamento em ram para armazenamento da referencia em disco (pelo Id da mensagem que aceitou a conversa auditavel e o contador de quantas mensagens auditaveis foram processadas)
-- Mover os updates para dentro das mudanças de estado
 - Fazer logger
 - Adicionar path no tsconfig
 

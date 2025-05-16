@@ -38,8 +38,28 @@ export async function sendTextMessage(tabId: number, chatMessage: AuditableMessa
     return result;
 }
 
+export async function sendFileMessage(tabId: number, chatId: string, fileContent: string) {
+    const [{ result }] = await chrome.scripting.executeScript({
+        func: (chatId: string, fileContent: string) => {
+            // @ts-ignore
+            const WhatsappLayer: typeof WPP = window.WPP;
+
+            const file = new File([fileContent], 'data.json', { type: 'application/json' });
+            return WhatsappLayer.chat.sendFileMessage(chatId, file, { type: "document" });
+        },
+        args: [chatId, fileContent],
+        target: { tabId },
+        world: 'MAIN',
+    });
+
+    console.log("result is: ", result)
+    return result;
+}
+
 // Por padrão pega a última mensagem do chat e a direção é after
 export async function getChatMessages(tabId: number, chatId: string, options: GetMessagesOptions) {
+    if (options?.count === 0) return [];
+
     const [{ result }] = await chrome.scripting.executeScript({
         func: (chatId: string, options: GetMessagesOptions) => {
             // Return a promise that we'll resolve in the injected context

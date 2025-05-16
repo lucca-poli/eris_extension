@@ -1,5 +1,5 @@
-import { ActionOptions, InternalMessage, GetMessagesOptions, AuditableMessage, ChatState, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage } from "./utils/types";
-import { sendTextMessage, getChatMessages, setInputbox } from "./utils/chrome_lib"
+import { ActionOptions, InternalMessage, AuditableMessage, ChatState, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage, GetMessages, SendFileMessage } from "./utils/types";
+import { sendTextMessage, getChatMessages, setInputbox, sendFileMessage } from "./utils/chrome_lib"
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
 
 // Tab manager - Manages current whatsapp web session
@@ -152,7 +152,23 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
     const message = internalMessage.payload as string;
     const tabId = tabManager.getWhatsappTab().id as number;
     setInputbox(tabId, message);
-})
+});
+
+chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender, sendResponse) => {
+    if (internalMessage.action !== ActionOptions.GET_MESSAGES) return;
+
+    const { chatId, options } = internalMessage.payload as GetMessages;
+    const tabId = tabManager.getWhatsappTab().id as number;
+
+    (async () => {
+        const messages = await getChatMessages(tabId, chatId, options);
+        //
+        // Cannot send complex objects
+        sendResponse(messages);
+    })();
+
+    return true;
+});
 
 chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender, sendResponse) => {
     if (internalMessage.action !== ActionOptions.SEND_TEXT_MESSAGE) return;
@@ -167,3 +183,13 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender,
     return true;
 });
 
+chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
+    if (internalMessage.action !== ActionOptions.SEND_FILE_MESSAGE) return;
+
+    (async () => {
+        const tabId = tabManager.getWhatsappTab().id as number;
+        const { chatId, fileContent } = internalMessage.payload as SendFileMessage;
+        const result = await sendFileMessage(tabId, chatId, fileContent);
+        if (!result) throw new Error("Could not send file.");
+    })();
+});

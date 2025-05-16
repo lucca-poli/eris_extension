@@ -1,4 +1,4 @@
-import { AuditableChatOptions, AuditableChatStates, ChatMessageV2, ChatState } from "./types";
+import { AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
 
 export class AuditableChatStateMachine {
     private chatId: string;
@@ -10,11 +10,11 @@ export class AuditableChatStateMachine {
         this.currentState = currentState || AuditableChatStates.IDLE;
     };
 
-    static async updateState(chatId: string, incomingMessage: ChatMessageV2) {
-        const auditableChat = await AuditableChatStateMachine.getAuditable(chatId);
-        if (!auditableChat) throw new Error("Auditable chat not in memory.");
+    static async updateState(chatId: string, incomingMessage: AuditableMessage): Promise<ChatState | undefined> {
+        const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+        const auditableChat = new AuditableChatStateMachine(chatId, auditableState?.currentState);
 
-        switch (auditableChat.currentState) {
+        switch (auditableChat.getCurrentState()) {
             case AuditableChatStates.IDLE:
                 if (incomingMessage.content === AuditableChatOptions.REQUEST) {
                     if (incomingMessage.authorIsMe) {
@@ -44,9 +44,14 @@ export class AuditableChatStateMachine {
                 throw new Error(`Unexpected State in conversation: ${auditableChat.currentState}`)
         }
 
-        await AuditableChatStateMachine.setAuditable(chatId, auditableChat);
-
-        return auditableChat;
+        const stateChanged = auditableState?.currentState !== auditableChat.getCurrentState();
+        if (!stateChanged) return undefined;
+        const newChatState: ChatState = {
+            ...auditableState,
+            currentState: auditableChat.getCurrentState(),
+        };
+        await AuditableChatStateMachine.setAuditable(chatId, newChatState);
+        return auditableState;
     }
 
     getCurrentState() {
@@ -74,8 +79,12 @@ export class AuditableChatStateMachine {
         const chat = await this.getAuditable(chatId);
         if (!chat) throw new Error("Trying to set the init Id in an unexistent chat.");
 
-        chat.currentAuditableChatInitId = messageId;
-        chat.auditableMessagesCounter = 0;
+        const auditableChatReference: AuditableChatReference = {
+            auditableMessagesCounter: 0,
+            currentAuditableChatInitId: messageId
+        }
+        chat.auditableChatReference = auditableChatReference;
+
         console.log("Auditable Chat is now: ", chat);
         await this.setAuditable(chatId, chat);
     }
@@ -83,10 +92,9 @@ export class AuditableChatStateMachine {
     static async increaseAuditableCounter(chatId: string): Promise<void> {
         const chat = await this.getAuditable(chatId);
         console.log("Chat before trying to increase: ", chat)
-        if (!chat) throw new Error("Trying to set the init Id in an unexistent chat.");
-        if (chat.auditableMessagesCounter === undefined) throw new Error("Trying to increase an unexistent chat.");
+        if (!chat?.auditableChatReference) throw new Error("Auditable chat reference doesn't exist.");
 
-        chat.auditableMessagesCounter = chat.auditableMessagesCounter + 1;
+        chat.auditableChatReference.auditableMessagesCounter += 1;
         await this.setAuditable(chatId, chat);
     }
 
@@ -101,6 +109,15 @@ export class AuditableChatStateMachine {
     static async removeAuditable(chatId: string): Promise<void> {
         const chats = await this.getAll();
         delete chats[chatId];
+        return new Promise((resolve) => {
+            chrome.storage.local.set({ [this.STORAGE_KEY]: chats }, () => resolve());
+        });
+    }
+
+    static async removeAuditableChatReference(chatId: string): Promise<void> {
+        const chats = await this.getAll();
+        const chat = chats[chatId];
+        delete chat?.auditableChatReference;
         return new Promise((resolve) => {
             chrome.storage.local.set({ [this.STORAGE_KEY]: chats }, () => resolve());
         });

@@ -1,9 +1,10 @@
 export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
-    GET_LAST_CHAT_MESSAGE = "GET_LAST_CHAT_MESSAGE",
+    GET_MESSAGES = "GET_MESSAGES",
     SET_INPUT_BOX = "SET_INPUT_BOX",
     SEND_TEXT_MESSAGE = "SEND_TEXT_MESSAGE",
+    SEND_FILE_MESSAGE = "SEND_FILE_MESSAGE",
     PROCESS_AUDITABLE_MESSAGE = "PROCESS_AUDITABLE_MESSAGE",
     DEBUG = "DEBUG"
 };
@@ -27,33 +28,30 @@ export type InternalMessage = {
     payload?: any
 }
 
-export type SendMessage = {
-    chatId: string,
-    message: string,
-    hash?: string,
-}
-
-export type ChatMessage = {
-    content: string,
-    author: string
-};
-
-export type ChatMessageV2 = {
-    content: string,
-    authorIsMe: boolean,
-    hash?: string,
-}
-
 export type ChatState = {
     currentState: AuditableChatStates,
-    currentAuditableChatInitId?: string,
-    auditableMessagesCounter?: number
+    auditableChatReference?: AuditableChatReference
+}
+
+export type AuditableChatReference = {
+    currentAuditableChatInitId: string,
+    auditableMessagesCounter: number
+}
+
+export type SendFileMessage = {
+    chatId: string;
+    fileContent: string;
 }
 
 export type GetMessagesOptions = {
     count?: number;
     direction?: "after" | "before";
     id?: string;
+}
+
+export type GetMessages = {
+    chatId: string,
+    options: GetMessagesOptions
 }
 
 export type ProcessAuditableMessage = {

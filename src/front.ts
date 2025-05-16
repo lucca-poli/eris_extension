@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableChatOptions, AuditableChatStates, AuditableMessage, InternalMessage, ChatMessageV2, ProcessAuditableMessage } from "./utils/types"
+import { ActionOptions, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -41,15 +41,53 @@ class DomProcessor {
             // @ts-ignore
             endAuditableButton.innerText = "🔲";
 
-            endAuditableButton.addEventListener("click", () => {
-                chrome.runtime.sendMessage({
+            endAuditableButton.addEventListener("click", async () => {
+                await chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
                         content: AuditableChatOptions.END,
                         chatId,
                         authorIsMe: true
                     } as AuditableMessage
-                } as InternalMessage)
+                } as InternalMessage);
+
+                // Contruir o JSON
+                const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+                if (!auditableState) throw new Error("There should be a conversation created.");
+                if (!auditableState.auditableChatReference) throw new Error("There should be a auditable chat reference.");
+
+                const getMessages: GetMessages = {
+                    chatId,
+                    options: {
+                        count: auditableState.auditableChatReference.auditableMessagesCounter,
+                        direction: "after",
+                        id: auditableState.auditableChatReference.currentAuditableChatInitId
+                    }
+                }
+                const auditableMessages: AuditableMessage[] = await chrome.runtime.sendMessage({
+                    action: ActionOptions.GET_MESSAGES,
+                    payload: getMessages
+                } as InternalMessage);
+
+                const logMessages = auditableMessages.map((message) => {
+                    return {
+                        content: message.content as string,
+                        authorIsMe: message.authorIsMe,
+                        hash: message.hash as string,
+                    };
+                });
+
+                const jsonLogs = JSON.stringify(logMessages);
+
+                console.log(jsonLogs);
+
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_FILE_MESSAGE,
+                    payload: {
+                        chatId,
+                        fileContent: jsonLogs
+                    } as SendFileMessage
+                } as InternalMessage);
             });
 
             this.currentChatButton?.appendChild(endAuditableButton);
@@ -238,14 +276,14 @@ window.addEventListener("message", async (event: MessageEvent) => {
     if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
     const incomingChatMessage = internalMessage.payload as AuditableMessage;
-    const { chatId, ...chatMessage } = incomingChatMessage;
+    const { chatId } = incomingChatMessage;
 
     console.log("Old chatState: ", await AuditableChatStateMachine.getAuditable(chatId))
     console.log("Active chat before processing: ", currentAuditableChatId);
 
     // Manage AuditableChats state
-    const newState = await AuditableChatStateMachine.updateState(chatId, chatMessage as ChatMessageV2);
-    currentAuditableChatId = chatId;
+    const newState = await AuditableChatStateMachine.updateState(chatId, incomingChatMessage);
+    if (newState) currentAuditableChatId = chatId;
     console.log("New chatState: ", await AuditableChatStateMachine.getAuditable(chatId))
 
     console.log("Active chat after processing: ", currentAuditableChatId);

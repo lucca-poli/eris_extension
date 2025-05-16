@@ -52,7 +52,7 @@ function createChatStatesDisplay(chats: Record<string, ChatState>): HTMLElement 
     }
 
     for (const chatId in chats) {
-        const { currentState, currentAuditableChatInitId } = chats[chatId];
+        const { currentState, auditableChatReference } = chats[chatId];
         const state = document.createElement("div");
         state.style.display = "flex";
         state.style.flexDirection = "row";
@@ -75,11 +75,19 @@ function createChatStatesDisplay(chats: Record<string, ChatState>): HTMLElement 
         state.appendChild(currentStateDiv);
         stateDiv.appendChild(state);
 
-        if (currentAuditableChatInitId) {
+        if (auditableChatReference) {
             const currentAuditableDiv = document.createElement("div");
             currentAuditableDiv.style.backgroundColor = "lightgray";
             currentAuditableDiv.style.padding = "3px 6px";
-            currentAuditableDiv.textContent = currentAuditableChatInitId;
+            currentAuditableDiv.textContent = auditableChatReference?.currentAuditableChatInitId;
+
+            const currentAuditableCounterDiv = document.createElement("div");
+            currentAuditableCounterDiv.style.backgroundColor = "lightgray";
+            currentAuditableCounterDiv.style.padding = "3px 6px";
+            currentAuditableCounterDiv.textContent = String(auditableChatReference?.auditableMessagesCounter);
+
+            stateDiv.appendChild(currentAuditableDiv);
+            stateDiv.appendChild(currentAuditableCounterDiv);
         }
     }
 
