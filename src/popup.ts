@@ -1,5 +1,5 @@
 import { ChatState } from "./utils/types";
-import { AuditableChat } from "./front";
+import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
 
 const root = document.getElementById('root');
 if (!root) throw new Error("Couldn't find popup root element.");
@@ -13,7 +13,7 @@ async function loadPopupContent(root: HTMLElement) {
     root.innerHTML = '';
 
     // Get fresh data
-    const chats = await AuditableChat.getAll();
+    const chats = await AuditableChatStateMachine.getAll();
 
     // Create and append chat states display
     const chatsDiv = createChatStatesDisplay(chats);
@@ -27,7 +27,7 @@ async function loadPopupContent(root: HTMLElement) {
 
     // Set up the delete handler properly
     deleteAllButton.onclick = async () => {
-        await AuditableChat.removeAll();
+        await AuditableChatStateMachine.removeAll();
 
         // Option 1: Reload popup content without closing/reopening
         await loadPopupContent(root);
@@ -52,7 +52,7 @@ function createChatStatesDisplay(chats: Record<string, ChatState>): HTMLElement 
     }
 
     for (const chatId in chats) {
-        const { currentState } = chats[chatId];
+        const { currentState, currentAuditableChatInitId } = chats[chatId];
         const state = document.createElement("div");
         state.style.display = "flex";
         state.style.flexDirection = "row";
@@ -70,9 +70,17 @@ function createChatStatesDisplay(chats: Record<string, ChatState>): HTMLElement 
         currentStateDiv.style.padding = "3px 6px";
         currentStateDiv.textContent = currentState;
 
+
         state.appendChild(chatIdDiv);
         state.appendChild(currentStateDiv);
         stateDiv.appendChild(state);
+
+        if (currentAuditableChatInitId) {
+            const currentAuditableDiv = document.createElement("div");
+            currentAuditableDiv.style.backgroundColor = "lightgray";
+            currentAuditableDiv.style.padding = "3px 6px";
+            currentAuditableDiv.textContent = currentAuditableChatInitId;
+        }
     }
 
     return stateDiv;

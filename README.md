@@ -16,12 +16,17 @@ Vou coletar todos os boleanos que preciso a cada iteração do loop
 Atualizo o botão e mando mensagens pro back processar se preciso
 
 # Refinement Pool
+- Unificar os AuditableChat no back
+- Mudar os auditable chats pro disco ao invés da RAM
 - Mudar a referencia da ultima mensagem em conversa auditavel de armazenamento em ram para armazenamento da referencia em disco (pelo Id da mensagem que aceitou a conversa auditavel e o contador de quantas mensagens auditaveis foram processadas)
+- Mover os updates para dentro das mudanças de estado
 - Fazer logger
 - Adicionar path no tsconfig
 
 # Bugs
 
+- Quando da refresh o inject_api.js da pau, tem que abrir uma nova guia do whatsapp
+- Eu não consigo receber aceite de mensagem sem o chat estar aberto, porque ele não fica registrado como idle. Instanciar um novo chat na memoria como idle, atualizar, e se continuar como idle, deletar. No passado eu fiz a condição pra criar ter um oldState || stateChanged
 - Se ficar muito tempo sem mexer no browser ele fica como idle e a api storage para de funcionar, então se o usuario receber uma mensagem de requisição, aceite, deny ou end isso não fica registrado
 - O cara pode só apagar a conversa até um request anterior e aceitar, botar um timeout pra cada request
 

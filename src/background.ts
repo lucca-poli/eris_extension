@@ -1,5 +1,6 @@
-import { ActionOptions, InternalMessage, AuditableMessage, ChatState, AuditableChatStates } from "./utils/types";
-import { sendTextMessage, getLastChatMessage, setInputbox } from "./utils/chrome_lib"
+import { ActionOptions, InternalMessage, GetMessagesOptions, AuditableMessage, ChatState, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage } from "./utils/types";
+import { sendTextMessage, getChatMessages, setInputbox } from "./utils/chrome_lib"
+import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
 
 // Tab manager - Manages current whatsapp web session
 class TabManager {
@@ -43,7 +44,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
         tabManager.updateTab();
         // Remover a conversa do storage se o estado for idle
     }
-})
+});
 
 chrome.commands.onCommand.addListener((shortcut) => {
     if (shortcut === "reload") {
@@ -83,7 +84,6 @@ class AuditableChat {
 const auditableChats: Map<string, AuditableChat> = new Map([]);
 
 chrome.storage.onChanged.addListener((changes) => {
-    console.log("Changes: ", changes)
     const entries = Object.entries(changes) as [string, {
         oldValue?: Record<string, ChatState>,
         newValue?: Record<string, ChatState>,
@@ -91,8 +91,6 @@ chrome.storage.onChanged.addListener((changes) => {
     for (const [key, { oldValue, newValue }] of entries) {
         if (key !== AuditableChat.STORAGE_KEY || !oldValue || !newValue) continue;
 
-        console.log("Old state: ", oldValue)
-        console.log("New state: ", newValue)
         const oldChatIds = Object.keys(oldValue);
         const newChatIds = Object.keys(newValue);
         const chatIds = Array.from(new Set([...oldChatIds, ...newChatIds]));
@@ -102,42 +100,58 @@ chrome.storage.onChanged.addListener((changes) => {
             const newState = newValue[chatId]?.currentState;
 
             const oldStateIsRequest = oldState === AuditableChatStates.REQUEST_SENT || oldState === AuditableChatStates.REQUEST_RECEIVED;
-            console.log("Old state: ", oldState)
-            console.log("New state: ", newState)
             if (oldStateIsRequest && newState === AuditableChatStates.ONGOING) auditableChats.set(chatId, new AuditableChat(chatId));
         });
     }
 })
 
-chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
-    if (internalMessage.action !== ActionOptions.PROCESS_AUDITABLE_MESSAGE) return;
-
+function processAuditableMessage(tabManager: TabManager, auditableChats: Map<string, AuditableChat>, incomingMessage: AuditableMessage) {
     // Se for uma string é uma mensagem do usuário e devo processar, se não a mensagem vem de fora
-    const arrivedMessage = internalMessage.payload as AuditableMessage;
-    console.log("Message to process: ", arrivedMessage);
+    console.log("processingAuditableMessage: ", incomingMessage)
+    let auditableChat = auditableChats.get(incomingMessage.chatId)
+    if (!auditableChat) auditableChat = new AuditableChat(incomingMessage.chatId);
 
-    let auditableChat = auditableChats.get(arrivedMessage.chatId)
-    if (!auditableChat) auditableChat = new AuditableChat(arrivedMessage.chatId);
-
-    if (arrivedMessage.authorIsMe) {
-        arrivedMessage.hash = auditableChat.calculateHash(arrivedMessage.content as string);
+    if (incomingMessage.authorIsMe) {
+        incomingMessage.hash = auditableChat.calculateHash(incomingMessage.content as string);
 
         (async () => {
             const tabId = tabManager.getWhatsappTab().id as number;
-            await sendTextMessage(tabId, arrivedMessage);
+            await sendTextMessage(tabId, incomingMessage);
         })();
     }
-    auditableChat.updateHash(arrivedMessage.hash as string)
+    auditableChat.updateHash(incomingMessage.hash as string);
+}
+
+chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
+    if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
+
+    const incomingChatMessage = internalMessage.payload as ProcessAuditableMessage;
+    const { chatId, ...auditableMessage } = incomingChatMessage.incomingMessage;
+    console.log("IncomingMessage: ", incomingChatMessage);
+
+    (async () => {
+        const currentState = await AuditableChatStateMachine.getAuditable(chatId);
+        // Vai bugar se o cara mandar a mesma mensagem de aceite
+        if (currentState?.currentState === AuditableChatStates.ONGOING && auditableMessage.content === AuditableChatOptions.ACCEPT) {
+            const messageId = auditableMessage.messageId;
+            if (!messageId) throw new Error("Auditable MessageId not found.");
+            AuditableChatStateMachine.setAuditableStart(chatId, messageId);
+        }
+
+        if (incomingChatMessage.toCalculateHash) {
+            processAuditableMessage(tabManager, auditableChats, incomingChatMessage.incomingMessage);
+            AuditableChatStateMachine.increaseAuditableCounter(chatId);
+        }
+    })();
+
 });
 
 chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
     if (internalMessage.action !== ActionOptions.SET_INPUT_BOX) return;
 
     const message = internalMessage.payload as string;
-    (async () => {
-        const tabId = tabManager.getWhatsappTab().id as number;
-        setInputbox(tabId, message);
-    })();
+    const tabId = tabManager.getWhatsappTab().id as number;
+    setInputbox(tabId, message);
 })
 
 chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender, sendResponse) => {
@@ -153,16 +167,3 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender,
     return true;
 });
 
-chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender, sendResponse) => {
-    if (internalMessage.action !== ActionOptions.GET_LAST_CHAT_MESSAGE) return;
-
-    (async () => {
-        const tabId = tabManager.getWhatsappTab().id as number;
-        const chatId = internalMessage.payload as string;
-        const lastChatMessage = await getLastChatMessage(tabId, chatId);
-        // Cannot send complex objects
-        sendResponse(lastChatMessage)
-    })();
-
-    return true;
-});

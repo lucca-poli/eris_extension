@@ -11,6 +11,7 @@ WhatsappLayer.on('chat.new_message', async (chatMessage) => {
         chatId: chatMessage.id?.remote?._serialized as string,
         authorIsMe: chatMessage.id.fromMe,
         hash: chatMessage.description,
+        messageId: chatMessage.id._serialized
     };
 
     if (!chatMessage?.from?.isUser()) return;

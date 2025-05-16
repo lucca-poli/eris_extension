@@ -45,11 +45,25 @@ export type ChatMessageV2 = {
 }
 
 export type ChatState = {
-    currentState: AuditableChatStates
+    currentState: AuditableChatStates,
+    currentAuditableChatInitId?: string,
+    auditableMessagesCounter?: number
+}
+
+export type GetMessagesOptions = {
+    count?: number;
+    direction?: "after" | "before";
+    id?: string;
+}
+
+export type ProcessAuditableMessage = {
+    incomingMessage: AuditableMessage,
+    toCalculateHash: boolean
 }
 
 export type AuditableMessage = {
     chatId: string,
+    messageId?: string,
     content?: string,
     authorIsMe: boolean,
     hash?: string,

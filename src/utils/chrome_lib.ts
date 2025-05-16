@@ -1,4 +1,4 @@
-import { AuditableMessage, ChatMessage } from "./types";
+import { AuditableMessage, GetMessagesOptions } from "./types";
 import WPP from "@wppconnect/wa-js"
 
 export function setInputbox(tabId: number, message: string) {
@@ -38,29 +38,28 @@ export async function sendTextMessage(tabId: number, chatMessage: AuditableMessa
     return result;
 }
 
-export async function getLastChatMessage(tabId: number, chatId: string) {
+// Por padrão pega a última mensagem do chat e a direção é after
+export async function getChatMessages(tabId: number, chatId: string, options: GetMessagesOptions) {
     const [{ result }] = await chrome.scripting.executeScript({
-        func: (chatId) => {
+        func: (chatId: string, options: GetMessagesOptions) => {
             // Return a promise that we'll resolve in the injected context
             return new Promise((resolve) => {
                 // @ts-ignore
                 const WhatsappLayer: typeof WPP = window.WPP;
 
-                WhatsappLayer.chat.getMessages(chatId, { count: 1 })
+                WhatsappLayer.chat.getMessages(chatId, options)
                     .then((messages) => {
-                        const lastMessage = messages[0];
+                        const auditableMessages = messages.map((message) => {
+                            return {
+                                content: message.body,
+                                authorIsMe: message.id?.fromMe,
+                                chatId: message.id?.remote._serialized,
+                                hash: message.description,
+                                messageId: message.id?._serialized
+                            } as AuditableMessage;
+                        })
 
-                        if (!lastMessage) {
-                            resolve(null);
-                            return;
-                        }
-
-                        const lastChatMessage = {
-                            content: lastMessage.body,
-                            author: lastMessage.from?._serialized
-                        } as ChatMessage;
-
-                        resolve(lastChatMessage);
+                        resolve(auditableMessages);
                     })
                     .catch((error: any) => {
                         console.error("Error getting messages:", error);
@@ -68,11 +67,11 @@ export async function getLastChatMessage(tabId: number, chatId: string) {
                     });
             });
         },
-        args: [chatId],
+        args: [chatId, options],
         target: { tabId },
         world: 'MAIN',
     });
 
-    return result as ChatMessage | null;
+    return result as AuditableMessage[];
 }
 
