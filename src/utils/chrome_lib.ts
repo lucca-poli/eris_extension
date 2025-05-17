@@ -1,4 +1,4 @@
-import { ChatMessage, SendMessage } from "./types";
+import { AuditableMessage, GetMessagesOptions } from "./types";
 import WPP from "@wppconnect/wa-js"
 
 export function setInputbox(tabId: number, message: string) {
@@ -14,69 +14,86 @@ export function setInputbox(tabId: number, message: string) {
     });
 }
 
-export async function sendTextMessage(tabId: number, chatMessage: SendMessage) {
-    const { chatId, message, hash } = chatMessage;
+export async function getUserId(tabId: number) {
     const [{ result }] = await chrome.scripting.executeScript({
-        func: (chatId, message) => {
+        func: () => {
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
-            return WhatsappLayer.chat.sendTextMessage(chatId, message, {
+            return WhatsappLayer.conn.getMyUserId();
+        },
+        target: { tabId },
+        world: 'MAIN',
+    });
+    return result?._serialized;
+}
+
+export async function sendTextMessage(tabId: number, chatMessage: AuditableMessage) {
+    const { chatId, content } = chatMessage;
+    let { hash } = chatMessage;
+    if (!hash) hash = '';
+    const [{ result }] = await chrome.scripting.executeScript({
+        func: (chatId, content, hash) => {
+            // @ts-ignore
+            const WhatsappLayer: typeof WPP = window.WPP;
+
+            if (hash) return WhatsappLayer.chat.sendTextMessage(chatId, content, {
                 // @ts-ignore: talvez de merda depois ignorar esse erro
                 linkPreview: {
                     description: hash,
                 }
             });
+            return WhatsappLayer.chat.sendTextMessage(chatId, content);
         },
-        args: [chatId, message],
+        args: [chatId, content, hash],
         target: { tabId },
         world: 'MAIN',
     });
     return result;
 }
 
-export async function getCurrentChat(tabId: number) {
+export async function sendFileMessage(tabId: number, chatId: string, fileContent: string) {
     const [{ result }] = await chrome.scripting.executeScript({
-        func: () => {
+        func: (chatId: string, fileContent: string) => {
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
-            const activeChat = WhatsappLayer.chat.getActiveChat();
-            if (activeChat?.isUser) return activeChat?.id._serialized;
-            return undefined;
+
+            const file = new File([fileContent], 'data.json', { type: 'application/json' });
+            return WhatsappLayer.chat.sendFileMessage(chatId, file, { type: "document" });
         },
+        args: [chatId, fileContent],
         target: { tabId },
         world: 'MAIN',
     });
+
+    console.log("result is: ", result)
     return result;
 }
 
-export async function getLastChatMessage(tabId: number, chatId: string) {
+// Por padrão pega a última mensagem do chat e a direção é after
+export async function getChatMessages(tabId: number, chatId: string, options: GetMessagesOptions) {
+    if (options?.count === 0) return [];
+
     const [{ result }] = await chrome.scripting.executeScript({
-        func: (chatId) => {
+        func: (chatId: string, options: GetMessagesOptions) => {
             // Return a promise that we'll resolve in the injected context
             return new Promise((resolve) => {
                 // @ts-ignore
                 const WhatsappLayer: typeof WPP = window.WPP;
 
-                WhatsappLayer.chat.getMessages(chatId, { count: 1 })
+                WhatsappLayer.chat.getMessages(chatId, options)
                     .then((messages) => {
-                        console.log("Got messages:", messages);
-                        const lastMessage = messages[0];
+                        const auditableMessages = messages.map((message) => {
+                            return {
+                                content: message.body,
+                                author: message.from?._serialized,
+                                chatId: message.id?.remote._serialized,
+                                hash: message.description,
+                                messageId: message.id?._serialized,
+                                timestamp: message.t
+                            } as AuditableMessage;
+                        })
 
-                        if (!lastMessage) {
-                            console.log("No messages found");
-                            resolve(null);
-                            return;
-                        }
-
-                        console.log("Last message body:", lastMessage.body);
-                        console.log("Last message from:", lastMessage.from?._serialized);
-
-                        const lastChatMessage = {
-                            content: lastMessage.body,
-                            author: lastMessage.from?._serialized
-                        } as ChatMessage;
-
-                        resolve(lastChatMessage);
+                        resolve(auditableMessages);
                     })
                     .catch((error: any) => {
                         console.error("Error getting messages:", error);
@@ -84,19 +101,11 @@ export async function getLastChatMessage(tabId: number, chatId: string) {
                     });
             });
         },
-        args: [chatId],
+        args: [chatId, options],
         target: { tabId },
         world: 'MAIN',
     });
 
-    return result as ChatMessage | null;
-}
-
-export async function getCurrentTab() {
-    let queryOptions = { active: true, lastFocusedWindow: true };
-    // `tab` will either be a `tabs.Tab` instance or `undefined`.
-    const [tab] = await chrome.tabs.query(queryOptions);
-    if (tab === undefined) throw new Error("Fatal: couldn't fetch current Tab.");
-    return tab;
+    return result as AuditableMessage[];
 }
 

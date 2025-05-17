@@ -13,7 +13,8 @@ export default {
     entry: {
         "injected_api": "./injected_api.ts",
         "front": "./front.ts",
-        "background": "./background.ts"
+        "background": "./background.ts",
+        "popup": "./popup.ts"
     },
     output: {
         filename: "[name].js",
@@ -38,11 +39,15 @@ export default {
     },
     watch: true,
     watchOptions: {
-        ignored: ['/node_modules', '/dist']
+        ignored: ['../node_modules', '../dist']
     },
     plugins: [
         new CopyPlugin({
-            patterns: [{ from: '.', to: '..', context: '../public/' }]
+            patterns: [{
+                from: path.resolve(__dirname, 'public/'),
+                to: path.resolve(__dirname, 'dist/'),
+                force: true,
+            }]
         })
     ]
 };

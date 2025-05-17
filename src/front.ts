@@ -1,15 +1,10 @@
-import { ActionOptions, AuditableChatOptions, AuditableMessage, ChatMessage, InternalMessage, SendMessage } from "./utils/types"
+import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
+import { ActionOptions, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
-    private currentChatId: string | null;
     private currentChatButton: HTMLDivElement | null;
-    private auditableChats: Set<string>;
     constructor() {
-        this.currentChatId = null;
         this.currentChatButton = null;
-        this.auditableChats = new Set([]);
-
-        this.updateChatState();
     }
 
     private createBaseButton(type: string, width: number): HTMLElement {
@@ -25,7 +20,7 @@ class DomProcessor {
         return baseButton;
     }
 
-    private attachInitAuditableChatButton(): HTMLDivElement {
+    attachInitAuditableChatButton() {
         const auditableButton = this.createBaseButton("div", 100) as HTMLDivElement;
         auditableButton.id = "auditable-wpp-chat-button-host";
 
@@ -34,63 +29,90 @@ class DomProcessor {
             ?.firstElementChild?.firstElementChild?.querySelector("span")?.firstElementChild?.lastElementChild?.firstElementChild;
         attachmentsDiv?.insertBefore(auditableButton, attachmentsDiv.childNodes[1]);
 
-        return auditableButton;
+        this.currentChatButton = auditableButton;
     }
 
-    // Só posso chamar essa função se tiver certeza que já estou num chat auditável
-    private async updateButtonState(): Promise<void> {
-        if (this.currentChatId === null) return;
-        const { content: lastMessage, author: lastMessageAuthorId } = await this.getLastChatMessage(this.currentChatId);
-        const isAuditable = this.auditableChats.has(this.currentChatId as string);
-        const lastMessageIsRequest = lastMessage === AuditableChatOptions.REQUEST;
-        const lastMessageAuthorIsMe = lastMessageAuthorId !== this.currentChatId;
-
+    private updateButtonState(currentState: AuditableChatStates, chatId: string): void {
         //@ts-ignore
         this.currentChatButton?.innerHTML = '';
 
-        if (isAuditable) {
-            if (lastMessage === AuditableChatOptions.END) {
-                this.auditableChats.delete(this.currentChatId as string);
-                return;
-            }
-
+        if (currentState === AuditableChatStates.ONGOING) {
             const endAuditableButton = this.createBaseButton("button", 46) as HTMLButtonElement;
             // @ts-ignore
             endAuditableButton.innerText = "🔲";
 
-            endAuditableButton.addEventListener("click", () => {
-                chrome.runtime.sendMessage({
+            endAuditableButton.addEventListener("click", async () => {
+                await chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
-                        message: AuditableChatOptions.END,
-                        chatId: this.currentChatId
-                    } as SendMessage
-                } as InternalMessage)
-                this.auditableChats.delete(this.currentChatId as string);
+                        content: AuditableChatOptions.END,
+                        chatId,
+                        author: await AuditableChatStateMachine.getUserId()
+                    } as AuditableMessage
+                } as InternalMessage);
+
+                // Contruir o JSON
+                const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+                if (!auditableState) throw new Error("There should be a conversation created.");
+                if (!auditableState.auditableChatReference) throw new Error("There should be a auditable chat reference.");
+
+                const getMessages: GetMessages = {
+                    chatId,
+                    options: {
+                        count: auditableState.auditableChatReference.auditableMessagesCounter,
+                        direction: "after",
+                        id: auditableState.auditableChatReference.currentAuditableChatInitId
+                    }
+                }
+                const auditableMessages: AuditableMessage[] = await chrome.runtime.sendMessage({
+                    action: ActionOptions.GET_MESSAGES,
+                    payload: getMessages
+                } as InternalMessage);
+
+                const logMessages = auditableMessages.map((message) => {
+                    return {
+                        content: message.content as string,
+                        author: message.author,
+                        hash: message.hash as string,
+                    };
+                });
+
+                const jsonLogs = JSON.stringify(logMessages);
+
+                console.log(jsonLogs);
+
+                chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_FILE_MESSAGE,
+                    payload: {
+                        chatId,
+                        fileContent: jsonLogs
+                    } as SendFileMessage
+                } as InternalMessage);
             });
 
             this.currentChatButton?.appendChild(endAuditableButton);
         }
 
-        if (!isAuditable && !lastMessageIsRequest) {
+        if (currentState === AuditableChatStates.IDLE) {
             const requireAuditableButton = this.createBaseButton("button", 46) as HTMLButtonElement;
             // @ts-ignore
             requireAuditableButton.innerText = "🔲";
 
-            requireAuditableButton.addEventListener("click", () => {
+            requireAuditableButton.addEventListener("click", async () => {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
-                        message: AuditableChatOptions.REQUEST,
-                        chatId: this.currentChatId
-                    } as SendMessage
+                        content: AuditableChatOptions.REQUEST,
+                        chatId,
+                        author: await AuditableChatStateMachine.getUserId()
+                    } as AuditableMessage
                 } as InternalMessage);
             });
 
             this.currentChatButton?.appendChild(requireAuditableButton);
         }
 
-        if (!isAuditable && lastMessageIsRequest && !lastMessageAuthorIsMe) {
+        if (currentState === AuditableChatStates.REQUEST_RECEIVED) {
 
             const acceptAuditableButton = this.createBaseButton("button", 46) as HTMLButtonElement;
             acceptAuditableButton.innerText = "✅";
@@ -98,51 +120,32 @@ class DomProcessor {
             const denyAuditableButton = this.createBaseButton("button", 46) as HTMLButtonElement;
             denyAuditableButton.innerText = "❌";
 
-            acceptAuditableButton.addEventListener("click", () => {
+            acceptAuditableButton.addEventListener("click", async () => {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
-                        chatId: this.currentChatId,
-                        message: AuditableChatOptions.ACCEPT
-                    } as SendMessage
+                        chatId,
+                        content: AuditableChatOptions.ACCEPT,
+                        author: await AuditableChatStateMachine.getUserId()
+                    } as AuditableMessage
                 } as InternalMessage);
-                this.auditableChats.add(this.currentChatId as string);
-                this.setupChatbox();
+                this.setupChatbox(chatId);
             });
 
-            denyAuditableButton.addEventListener("click", () => {
+            denyAuditableButton.addEventListener("click", async () => {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
-                        chatId: this.currentChatId,
-                        message: AuditableChatOptions.DENY
-                    } as SendMessage
+                        chatId,
+                        content: AuditableChatOptions.DENY,
+                        author: await AuditableChatStateMachine.getUserId()
+                    } as AuditableMessage
                 } as InternalMessage);
             });
 
             this.currentChatButton?.appendChild(denyAuditableButton);
             this.currentChatButton?.appendChild(acceptAuditableButton);
         }
-    }
-
-    private searchCurrentChat(): Promise<string | undefined> {
-        return new Promise((resolve) => {
-            const resolveId = (chatId: string | undefined) => resolve(chatId);
-            chrome.runtime.sendMessage({
-                action: ActionOptions.GET_CURRENT_CHAT
-            } as InternalMessage, resolveId);
-        })
-    }
-
-    private getLastChatMessage(chatId: string): Promise<ChatMessage> {
-        return new Promise((resolve) => {
-            chrome.runtime.sendMessage({
-                action: ActionOptions.GET_LAST_CHAT_MESSAGE,
-                payload: chatId
-            } as InternalMessage, (lastMessage: ChatMessage) => {
-                resolve(lastMessage);
-            })
-        });
     }
 
     private createCustomInputbox(holderText: string, originalText: string | undefined, chatId: string) {
@@ -188,7 +191,6 @@ class DomProcessor {
         }
 
         customInput.addEventListener('input', function() {
-            console.log("current text: ", auditableChatbox.textContent);
             if (auditableChatbox.textContent?.trim() === '') {
                 auditableChatbox.innerHTML = '<br>';
                 if (!parentElement.contains(placeHolderParent)) parentElement.appendChild(placeHolderParent);
@@ -217,27 +219,34 @@ class DomProcessor {
             }
         });
 
-        customInput.addEventListener('keydown', function(e) {
+        customInput.addEventListener('keydown', async (e) => {
             if (e.key === 'Backspace' && auditableChatbox?.textContent?.length === 0) e.preventDefault();
 
             if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (auditableChatbox?.textContent?.length === 0) return; // do nothing on messages with no text
+
                 chrome.runtime.sendMessage({
-                    action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
+                    action: ActionOptions.PROPAGATE_NEW_MESSAGE,
                     payload: {
-                        content: auditableChatbox.textContent,
-                        chatId,
-                        authorIsMe: true
-                    } as AuditableMessage,
+                        incomingMessage: {
+                            content: auditableChatbox.textContent,
+                            chatId,
+                            author: await AuditableChatStateMachine.getUserId()
+                        },
+                        toCalculateHash: true
+                    } as ProcessAuditableMessage,
                 } as InternalMessage);
 
-                auditableChatbox.innerHTML = '<br>';
-                if (!parentElement.contains(placeHolderParent)) parentElement.appendChild(placeHolderParent);
+                // @ts-ignore
+                auditableChatbox?.textContent = '';
+                this.setupChatbox(chatId);
             }
         });
         return parentElement;
     }
 
-    private setupChatbox() {
+    private setupChatbox(chatId: string) {
         const originalChatbox = document.querySelectorAll('p.selectable-text.copyable-text')[1]?.parentElement?.parentElement;
         const holderText = originalChatbox?.firstElementChild?.ariaLabel as string;
         const originalText = originalChatbox?.firstElementChild?.firstElementChild?.querySelector('span')?.innerHTML;
@@ -248,49 +257,74 @@ class DomProcessor {
             payload: ''
         } as InternalMessage);
 
-        const customInput = this.createCustomInputbox(holderText, originalText, this.currentChatId as string);
+        const customInput = this.createCustomInputbox(holderText, originalText, chatId);
 
         originalChatbox?.replaceWith(customInput);
     }
 
-    private updateChatState() {
-        setInterval(async () => {
-            const contactId = await this.searchCurrentChat();
-            const isSingleContact = !!contactId;
-            const isNewChat = contactId !== this.currentChatId;
-            const isAuditable = this.auditableChats.has(contactId as string);
-            if (isNewChat) {
-                if (isSingleContact) {
-                    this.currentChatId = contactId;
-                    this.currentChatButton = this.attachInitAuditableChatButton();
-                    if (isAuditable) this.setupChatbox();
-                } else {
-                    this.currentChatId = null;
-                    this.currentChatButton = null;
-                }
-            };
-
-            if (this.currentChatId === null) return;
-            //const lastChatMessage = await this.getLastChatMessage(this.currentChatId)
-
-            this.updateButtonState();
-
-            if (!isAuditable) return;
-
-            //chrome.runtime.sendMessage({
-            //    action: ActionOptions.PROCESS_AUDITABLE_MESSAGE,
-            //    payload: lastChatMessage
-            //} as InternalMessage);
-        }, 1000);
+    updateChatState(currentState: AuditableChatStates, chatId: string) {
+        this.updateButtonState(currentState, chatId);
+        if (currentState === AuditableChatStates.ONGOING) this.setupChatbox(chatId);
     }
-
 }
 
+let currentAuditableChatId: string | null = null;
 const domProcessorRepository = new DomProcessor();
 
-window.addEventListener("message", (event: MessageEvent) => {
+window.addEventListener("message", async (event: MessageEvent) => {
     const internalMessage: InternalMessage = event.data;
-    if (internalMessage.action !== ActionOptions.PROCESS_AUDITABLE_MESSAGE) return;
+    if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
+
+    const incomingChatMessage = internalMessage.payload as AuditableMessage;
+    const { chatId } = incomingChatMessage;
+
+    console.log("Old chatState: ", await AuditableChatStateMachine.getAuditable(chatId))
+    console.log("Active chat before processing: ", currentAuditableChatId);
+
+    // Manage AuditableChats state
+    const newState = await AuditableChatStateMachine.updateState(chatId, incomingChatMessage);
+    if (newState) currentAuditableChatId = chatId;
+    console.log("New chatState: ", await AuditableChatStateMachine.getAuditable(chatId))
+
+    console.log("Active chat after processing: ", currentAuditableChatId);
+
+    // Update DOM
+    if (currentAuditableChatId && currentAuditableChatId === chatId) {
+        const currentAuditableChat = await AuditableChatStateMachine.getAuditable(currentAuditableChatId);
+        if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
+        domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
+    }
+
+    const authorIsMe = (await AuditableChatStateMachine.getUserId()) === incomingChatMessage.author;
+    const toProcess = !authorIsMe && incomingChatMessage.hash
+    chrome.runtime.sendMessage({
+        action: ActionOptions.PROPAGATE_NEW_MESSAGE,
+        payload: {
+            incomingMessage: incomingChatMessage,
+            toCalculateHash: toProcess
+        } as ProcessAuditableMessage,
+    } as InternalMessage);
+});
+
+window.addEventListener("message", async (event: MessageEvent) => {
+    const internalMessage: InternalMessage = event.data;
+    if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_CHAT) return;
+
+    const chatId: string = internalMessage.payload;
+    if (currentAuditableChatId && (await AuditableChatStateMachine.getAuditable(currentAuditableChatId))?.currentState === AuditableChatStates.IDLE) {
+        await AuditableChatStateMachine.removeAuditable(currentAuditableChatId);
+    }
+
+    const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+    const currentState = auditableState?.currentState || AuditableChatStates.IDLE;
+    AuditableChatStateMachine.setAuditable(chatId, {
+        currentState
+    });
+    currentAuditableChatId = chatId;
+
+    domProcessorRepository.attachInitAuditableChatButton();
+    domProcessorRepository.updateChatState(currentState, currentAuditableChatId);
 
     chrome.runtime.sendMessage(internalMessage);
-})
+});
+

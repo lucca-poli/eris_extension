@@ -16,18 +16,18 @@ Vou coletar todos os boleanos que preciso a cada iteração do loop
 Atualizo o botão e mando mensagens pro back processar se preciso
 
 # Refinement Pool
-- Trocar o SendMessage por ChatMessage
-- Mudar a arquitetura de processamento de menssagens e do estado do chat para algo discreto (por meio de eventos)
-    - Usar evento de chat ativo ao inves de loop
-    - Salvar o estado de todo chat que não for normal
+- mudar o authorIsMe pra author
+- adicionar timestamp
+- Criar 2 tipos de mensagem. Um sendo a mensagem que eu crio e vou botar um hash em seguida e a outra sendo a que vem do whatsapp
+- Mudar os auditable chats pro disco ao invés da RAM
 - Fazer logger
-- Passar o armazenamento de conversas para o cliente (localmente)
 - Adicionar path no tsconfig
 
 # Bugs
 
-- Se o request não ficar como enviado ele não fica como sendo a ultima mensagem, então um usuário pode clicar várias vezes no botão de requisitar e fica meio paia
-- Conversa não vira auditável se o outro lado aceitar
+- Quando da refresh o inject_api.js da pau, tem que abrir uma nova guia do whatsapp
+- Eu não consigo receber aceite de mensagem sem o chat estar aberto, porque ele não fica registrado como idle. Instanciar um novo chat na memoria como idle, atualizar, e se continuar como idle, deletar. No passado eu fiz a condição pra criar ter um oldState || stateChanged
+- Se ficar muito tempo sem mexer no browser ele fica como idle e a api storage para de funcionar, então se o usuario receber uma mensagem de requisição, aceite, deny ou end isso não fica registrado
 - O cara pode só apagar a conversa até um request anterior e aceitar, botar um timeout pra cada request
 
 # Architural decisions
