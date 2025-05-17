@@ -122,6 +122,14 @@ export class AuditableChatStateMachine {
         });
     }
 
+    static async removeIdleChats(): Promise<void> {
+        const chats = await this.getAll();
+        Object.keys(chats).forEach(async (chatId) => {
+            const auditableChatState = await AuditableChatStateMachine.getAuditable(chatId) as ChatState;
+            const auditableState = auditableChatState.currentState;
+            if (auditableState === AuditableChatStates.IDLE) await AuditableChatStateMachine.removeAuditable(chatId);
+        });
+    }
 
     static async removeAuditable(chatId: string): Promise<void> {
         const chats = await this.getAll();

@@ -34,13 +34,15 @@ class TabManager {
 
 const tabManager = new TabManager();
 
-chrome.tabs.onUpdated.addListener((_tabId, _changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
     if (!tab.url?.includes("https://web.whatsapp.com/")) return;
+    await AuditableChatStateMachine.removeIdleChats();
     tabManager.updateTab(tab);
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+chrome.tabs.onRemoved.addListener(async (tabId) => {
     if (tabManager.getWhatsappTab().id === tabId) {
+        await AuditableChatStateMachine.removeIdleChats();
         tabManager.updateTab();
         // Remover a conversa do storage se o estado for idle
     }
