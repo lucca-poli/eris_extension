@@ -4,6 +4,7 @@ export class AuditableChatStateMachine {
     private chatId: string;
     private currentState: AuditableChatStates;
     private static STORAGE_KEY = 'chats';
+    private static USER_ID = 'userId';
 
     constructor(chatId: string, currentState?: AuditableChatStates) {
         this.chatId = chatId;
@@ -17,7 +18,8 @@ export class AuditableChatStateMachine {
         switch (auditableChat.getCurrentState()) {
             case AuditableChatStates.IDLE:
                 if (incomingMessage.content === AuditableChatOptions.REQUEST) {
-                    if (incomingMessage.authorIsMe) {
+                    const authorIsMe = (await AuditableChatStateMachine.getUserId()) === incomingMessage.author;
+                    if (authorIsMe) {
                         auditableChat.currentState = AuditableChatStates.REQUEST_SENT;
                     } else {
                         auditableChat.currentState = AuditableChatStates.REQUEST_RECEIVED;
@@ -105,6 +107,21 @@ export class AuditableChatStateMachine {
             chrome.storage.local.set({ [this.STORAGE_KEY]: chats }, () => resolve());
         });
     }
+
+    static async setUserId(userId: string): Promise<void> {
+        return new Promise((resolve) => {
+            chrome.storage.local.set({ [this.USER_ID]: userId }, () => resolve());
+        });
+    }
+
+    static async getUserId(): Promise<string | undefined> {
+        return new Promise((resolve) => {
+            chrome.storage.local.get([this.USER_ID], (result) => {
+                resolve(result[this.USER_ID]);
+            });
+        });
+    }
+
 
     static async removeAuditable(chatId: string): Promise<void> {
         const chats = await this.getAll();

@@ -47,7 +47,7 @@ class DomProcessor {
                     payload: {
                         content: AuditableChatOptions.END,
                         chatId,
-                        authorIsMe: true
+                        author: await AuditableChatStateMachine.getUserId()
                     } as AuditableMessage
                 } as InternalMessage);
 
@@ -72,7 +72,7 @@ class DomProcessor {
                 const logMessages = auditableMessages.map((message) => {
                     return {
                         content: message.content as string,
-                        authorIsMe: message.authorIsMe,
+                        author: message.author,
                         hash: message.hash as string,
                     };
                 });
@@ -98,13 +98,13 @@ class DomProcessor {
             // @ts-ignore
             requireAuditableButton.innerText = "🔲";
 
-            requireAuditableButton.addEventListener("click", () => {
+            requireAuditableButton.addEventListener("click", async () => {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
                         content: AuditableChatOptions.REQUEST,
                         chatId,
-                        authorIsMe: true
+                        author: await AuditableChatStateMachine.getUserId()
                     } as AuditableMessage
                 } as InternalMessage);
             });
@@ -120,25 +120,25 @@ class DomProcessor {
             const denyAuditableButton = this.createBaseButton("button", 46) as HTMLButtonElement;
             denyAuditableButton.innerText = "❌";
 
-            acceptAuditableButton.addEventListener("click", () => {
+            acceptAuditableButton.addEventListener("click", async () => {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
                         chatId,
                         content: AuditableChatOptions.ACCEPT,
-                        authorIsMe: true
+                        author: await AuditableChatStateMachine.getUserId()
                     } as AuditableMessage
                 } as InternalMessage);
                 this.setupChatbox(chatId);
             });
 
-            denyAuditableButton.addEventListener("click", () => {
+            denyAuditableButton.addEventListener("click", async () => {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
                         chatId,
                         content: AuditableChatOptions.DENY,
-                        authorIsMe: true
+                        author: await AuditableChatStateMachine.getUserId()
                     } as AuditableMessage
                 } as InternalMessage);
             });
@@ -219,7 +219,7 @@ class DomProcessor {
             }
         });
 
-        customInput.addEventListener('keydown', (e) => {
+        customInput.addEventListener('keydown', async (e) => {
             if (e.key === 'Backspace' && auditableChatbox?.textContent?.length === 0) e.preventDefault();
 
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -232,7 +232,7 @@ class DomProcessor {
                         incomingMessage: {
                             content: auditableChatbox.textContent,
                             chatId,
-                            authorIsMe: true
+                            author: await AuditableChatStateMachine.getUserId()
                         },
                         toCalculateHash: true
                     } as ProcessAuditableMessage,
@@ -295,7 +295,8 @@ window.addEventListener("message", async (event: MessageEvent) => {
         domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
     }
 
-    const toProcess = !incomingChatMessage.authorIsMe && incomingChatMessage.hash
+    const authorIsMe = (await AuditableChatStateMachine.getUserId()) === incomingChatMessage.author;
+    const toProcess = !authorIsMe && incomingChatMessage.hash
     chrome.runtime.sendMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,
         payload: {
@@ -324,6 +325,6 @@ window.addEventListener("message", async (event: MessageEvent) => {
     domProcessorRepository.attachInitAuditableChatButton();
     domProcessorRepository.updateChatState(currentState, currentAuditableChatId);
 
-    //chrome.runtime.sendMessage(internalMessage);
+    chrome.runtime.sendMessage(internalMessage);
 });
 

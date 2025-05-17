@@ -1,5 +1,5 @@
 import { ActionOptions, InternalMessage, AuditableMessage, ChatState, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage, GetMessages, SendFileMessage } from "./utils/types";
-import { sendTextMessage, getChatMessages, setInputbox, sendFileMessage } from "./utils/chrome_lib"
+import { sendTextMessage, getChatMessages, setInputbox, sendFileMessage, getUserId } from "./utils/chrome_lib"
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
 
 // Tab manager - Manages current whatsapp web session
@@ -36,7 +36,7 @@ const tabManager = new TabManager();
 
 chrome.tabs.onUpdated.addListener((_tabId, _changeInfo, tab) => {
     if (!tab.url?.includes("https://web.whatsapp.com/")) return;
-    tabManager.updateTab(tab)
+    tabManager.updateTab(tab);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -111,15 +111,16 @@ function processAuditableMessage(tabManager: TabManager, auditableChats: Map<str
     let auditableChat = auditableChats.get(incomingMessage.chatId)
     if (!auditableChat) auditableChat = new AuditableChat(incomingMessage.chatId);
 
-    if (incomingMessage.authorIsMe) {
-        incomingMessage.hash = auditableChat.calculateHash(incomingMessage.content as string);
+    (async () => {
+        const authorIsMe = (await AuditableChatStateMachine.getUserId()) === incomingMessage.author;
+        if (authorIsMe) {
+            incomingMessage.hash = auditableChat.calculateHash(incomingMessage.content as string);
 
-        (async () => {
             const tabId = tabManager.getWhatsappTab().id as number;
             await sendTextMessage(tabId, incomingMessage);
-        })();
-    }
-    auditableChat.updateHash(incomingMessage.hash as string);
+        }
+        auditableChat.updateHash(incomingMessage.hash as string);
+    })();
 }
 
 chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
@@ -191,5 +192,16 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         const { chatId, fileContent } = internalMessage.payload as SendFileMessage;
         const result = await sendFileMessage(tabId, chatId, fileContent);
         if (!result) throw new Error("Could not send file.");
+    })();
+});
+
+chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
+    if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_CHAT) return;
+
+    (async () => {
+        const tabId = tabManager.getWhatsappTab().id as number;
+        const userId = await getUserId(tabId);
+        const oldUserId = await AuditableChatStateMachine.getUserId();
+        if (userId && userId !== oldUserId) AuditableChatStateMachine.setUserId(userId);
     })();
 });

@@ -14,6 +14,19 @@ export function setInputbox(tabId: number, message: string) {
     });
 }
 
+export async function getUserId(tabId: number) {
+    const [{ result }] = await chrome.scripting.executeScript({
+        func: () => {
+            // @ts-ignore
+            const WhatsappLayer: typeof WPP = window.WPP;
+            return WhatsappLayer.conn.getMyUserId();
+        },
+        target: { tabId },
+        world: 'MAIN',
+    });
+    return result?._serialized;
+}
+
 export async function sendTextMessage(tabId: number, chatMessage: AuditableMessage) {
     const { chatId, content } = chatMessage;
     let { hash } = chatMessage;
@@ -72,10 +85,11 @@ export async function getChatMessages(tabId: number, chatId: string, options: Ge
                         const auditableMessages = messages.map((message) => {
                             return {
                                 content: message.body,
-                                authorIsMe: message.id?.fromMe,
+                                author: message.from?._serialized,
                                 chatId: message.id?.remote._serialized,
                                 hash: message.description,
-                                messageId: message.id?._serialized
+                                messageId: message.id?._serialized,
+                                timestamp: message.t
                             } as AuditableMessage;
                         })
 

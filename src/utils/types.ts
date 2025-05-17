@@ -63,7 +63,8 @@ export type AuditableMessage = {
     chatId: string,
     messageId?: string,
     content?: string,
-    authorIsMe: boolean,
+    author: string,
     hash?: string,
+    timestamp?: number,
 }
 
