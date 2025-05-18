@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "./utils/types"
+import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -73,13 +73,14 @@ class DomProcessor {
                     return {
                         content: message.content as string,
                         author: message.author,
-                        hash: message.hash as string,
+                        hash: message.hash as AuditableBlock,
                     };
                 });
 
-                const jsonLogs = JSON.stringify(logMessages);
-
-                console.log(jsonLogs);
+                const jsonLogs = JSON.stringify({
+                    initialBlock: auditableState.auditableChatReference.initialBlock,
+                    logMessages
+                });
 
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_FILE_MESSAGE,
@@ -121,6 +122,7 @@ class DomProcessor {
             denyAuditableButton.innerText = "❌";
 
             acceptAuditableButton.addEventListener("click", async () => {
+                // Por enquanto vou botar no bloco de inicio, sei que não é o ideal
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {

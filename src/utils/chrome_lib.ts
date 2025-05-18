@@ -28,11 +28,10 @@ export async function getUserId(tabId: number) {
 }
 
 export async function sendTextMessage(tabId: number, chatMessage: AuditableMessage) {
-    const { chatId, content } = chatMessage;
-    let { hash } = chatMessage;
-    if (!hash) hash = '';
+    const { chatId, content, hash } = chatMessage;
+    const hashString = hash ? JSON.stringify(hash) : "";
     const [{ result }] = await chrome.scripting.executeScript({
-        func: (chatId, content, hash) => {
+        func: (chatId: string, content: string, hash?: string) => {
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
 
@@ -44,7 +43,7 @@ export async function sendTextMessage(tabId: number, chatMessage: AuditableMessa
             });
             return WhatsappLayer.chat.sendTextMessage(chatId, content);
         },
-        args: [chatId, content, hash],
+        args: [chatId, content as string, hashString],
         target: { tabId },
         world: 'MAIN',
     });
@@ -69,12 +68,15 @@ export async function sendFileMessage(tabId: number, chatId: string, fileContent
     return result;
 }
 
-// Por padrão pega a última mensagem do chat e a direção é after
-export async function getChatMessages(tabId: number, chatId: string, options: GetMessagesOptions) {
+export async function getChatMessages(tabId: number, chatId: string, options?: GetMessagesOptions) {
     if (options?.count === 0) return [];
+    console.log("getMessages args: ");
+    console.log("tabId: ", tabId);
+    console.log("chatId: ", chatId);
+    console.log("options: ", options);
 
     const [{ result }] = await chrome.scripting.executeScript({
-        func: (chatId: string, options: GetMessagesOptions) => {
+        func: (chatId: string, options?: GetMessagesOptions) => {
             // Return a promise that we'll resolve in the injected context
             return new Promise((resolve) => {
                 // @ts-ignore
@@ -83,11 +85,13 @@ export async function getChatMessages(tabId: number, chatId: string, options: Ge
                 WhatsappLayer.chat.getMessages(chatId, options)
                     .then((messages) => {
                         const auditableMessages = messages.map((message) => {
+                            const auditableBlockString = message.description as string | undefined;
+                            const hash = auditableBlockString ? JSON.parse(auditableBlockString) : undefined;
                             return {
                                 content: message.body,
                                 author: message.from?._serialized,
                                 chatId: message.id?.remote._serialized,
-                                hash: message.description,
+                                hash,
                                 messageId: message.id?._serialized,
                                 timestamp: message.t
                             } as AuditableMessage;

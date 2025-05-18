@@ -35,7 +35,8 @@ export type ChatState = {
 
 export type AuditableChatReference = {
     currentAuditableChatInitId: string,
-    auditableMessagesCounter: number
+    auditableMessagesCounter: number,
+    initialBlock: AuditableBlock
 }
 
 export type SendFileMessage = {
@@ -64,7 +65,14 @@ export type AuditableMessage = {
     messageId?: string,
     content?: string,
     author: string,
-    hash?: string,
+    hash?: AuditableBlock,
     timestamp?: number,
+}
+
+export type AuditableBlock = {
+    hash: string,
+    previousHash: string,
+    counter: number,
+    commitedMessage: string
 }
 

@@ -6,11 +6,13 @@ import { ActionOptions, InternalMessage, AuditableMessage } from "./utils/types"
 const WhatsappLayer: typeof WPP = window.WPP;
 
 WhatsappLayer.on('chat.new_message', async (chatMessage) => {
+    const auditableBlockString = chatMessage.description as string | undefined;
+    const hash = auditableBlockString ? JSON.parse(auditableBlockString) : undefined;
     const arrivedMessage: AuditableMessage = {
         content: chatMessage.body,
         chatId: chatMessage.id?.remote?._serialized as string,
         author: chatMessage.from?._serialized as string,
-        hash: chatMessage.description,
+        hash,
         messageId: chatMessage.id._serialized,
         timestamp: chatMessage.t,
     };

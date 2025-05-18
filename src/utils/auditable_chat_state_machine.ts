@@ -1,4 +1,4 @@
-import { AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
+import { AuditableBlock, AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
 
 export class AuditableChatStateMachine {
     private chatId: string;
@@ -77,13 +77,14 @@ export class AuditableChatStateMachine {
         return chats[chatId];
     }
 
-    static async setAuditableStart(chatId: string, messageId: string): Promise<void> {
+    static async setAuditableStart(chatId: string, messageId: string, initialBlock: AuditableBlock): Promise<void> {
         const chat = await this.getAuditable(chatId);
         if (!chat) throw new Error("Trying to set the init Id in an unexistent chat.");
 
         const auditableChatReference: AuditableChatReference = {
             auditableMessagesCounter: 0,
-            currentAuditableChatInitId: messageId
+            currentAuditableChatInitId: messageId,
+            initialBlock
         }
         chat.auditableChatReference = auditableChatReference;
 
