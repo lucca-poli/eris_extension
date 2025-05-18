@@ -16,8 +16,10 @@ Vou coletar todos os boleanos que preciso a cada iteração do loop
 Atualizo o botão e mando mensagens pro back processar se preciso
 
 # Refinement Pool
-- mudar o authorIsMe pra author
-- adicionar timestamp
+- Retirar o counter do state (porque só ta sendo utilizado pra puxar todas as mensagens no fim da conversa)
+- consertar o initBlock quando for printar os logs
+- Mudar o AuditableChat pra ser só uma coletanea de funções estáticas para calcular os blocos, assinar, conferir, etc. Isso pode ser feito porque todo o estado tá nas mensagens.
+- Adicionar a seed por conversa auditavel na memoria. Posso adicionar como propriedade junto com o counter e o messageId e mandar pros logs no fim da conversa.
 - Criar 2 tipos de mensagem. Um sendo a mensagem que eu crio e vou botar um hash em seguida e a outra sendo a que vem do whatsapp
 - Mudar os auditable chats pro disco ao invés da RAM
 - Fazer logger

@@ -1,4 +1,4 @@
-import { ActionOptions, InternalMessage, AuditableMessage, ChatState, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage, GetMessages, SendFileMessage } from "./utils/types";
+import { ActionOptions, InternalMessage, AuditableMessage, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage, GetMessages, SendFileMessage, AuditableBlock } from "./utils/types";
 import { sendTextMessage, getChatMessages, setInputbox, sendFileMessage, getUserId } from "./utils/chrome_lib"
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
 
@@ -58,78 +58,129 @@ chrome.commands.onCommand.addListener((shortcut) => {
 console.log("background loaded");
 
 class AuditableChat {
-    lastHash: string;
-    private chatId: string;
     static STORAGE_KEY = 'chats';
 
-    constructor(chatId: string) {
-        this.chatId = chatId;
-        this.lastHash = this.initAuditableChat();
+    constructor() {
+        console.log("Non expected call to constructor.")
     };
 
-    private initAuditableChat() {
-        const initialization_process = "init_";
-        console.log("Starting auditable chat: ", this.chatId)
-        return initialization_process;
-    };
+    //static async #getCounter(chatId: string): Promise<number> {
+    //    const auditableChatState = await AuditableChatStateMachine.getAuditable(chatId);
+    //    const auditableReference = auditableChatState?.auditableChatReference;
+    //    if (!auditableReference) throw new Error(`Chat with id ${chatId} still has no reference. ${auditableChatState}`);
+    //
+    //    return auditableReference.auditableMessagesCounter
+    //}
 
-    calculateHash(messageToProcess: string) {
-        const newHash = this.lastHash + messageToProcess.trim() + "_";
-        return newHash;
-    }
+    static async generateInitBlock(initMessageId: string): Promise<AuditableBlock> {
+        const initCounter = 0;
+        const initMetadata = initMessageId;
+        const previousHash = "0000";
 
-    updateHash(incomingHash: string) {
-        this.lastHash = incomingHash;
-    }
-}
+        // initMetadata pode ser ou metadata ou message_i
+        // Ignorando a seed por enquanto
+        const ck = await AuditableChat.#hashFunction([String(initCounter)]);
+        const commitedMessage = AuditableChat.#commitFunction([ck, initMetadata]);
+        const initHash = await AuditableChat.#hashFunction([previousHash, ck, commitedMessage]);
 
-const auditableChats: Map<string, AuditableChat> = new Map([]);
-
-chrome.storage.onChanged.addListener((changes) => {
-    const entries = Object.entries(changes) as [string, {
-        oldValue?: Record<string, ChatState>,
-        newValue?: Record<string, ChatState>,
-    }][];
-    for (const [key, { oldValue, newValue }] of entries) {
-        if (key !== AuditableChat.STORAGE_KEY || !oldValue || !newValue) continue;
-
-        const oldChatIds = Object.keys(oldValue);
-        const newChatIds = Object.keys(newValue);
-        const chatIds = Array.from(new Set([...oldChatIds, ...newChatIds]));
-
-        chatIds.forEach((chatId) => {
-            const oldState = oldValue[chatId]?.currentState;
-            const newState = newValue[chatId]?.currentState;
-
-            const oldStateIsRequest = oldState === AuditableChatStates.REQUEST_SENT || oldState === AuditableChatStates.REQUEST_RECEIVED;
-            if (oldStateIsRequest && newState === AuditableChatStates.ONGOING) auditableChats.set(chatId, new AuditableChat(chatId));
-        });
-    }
-})
-
-function processAuditableMessage(tabManager: TabManager, auditableChats: Map<string, AuditableChat>, incomingMessage: AuditableMessage) {
-    // Se for uma string é uma mensagem do usuário e devo processar, se não a mensagem vem de fora
-    console.log("processingAuditableMessage: ", incomingMessage)
-    let auditableChat = auditableChats.get(incomingMessage.chatId)
-    if (!auditableChat) auditableChat = new AuditableChat(incomingMessage.chatId);
-
-    (async () => {
-        const authorIsMe = (await AuditableChatStateMachine.getUserId()) === incomingMessage.author;
-        if (authorIsMe) {
-            incomingMessage.hash = auditableChat.calculateHash(incomingMessage.content as string);
-
-            const tabId = tabManager.getWhatsappTab().id as number;
-            await sendTextMessage(tabId, incomingMessage);
+        const initBlock: AuditableBlock = {
+            previousHash,
+            counter: initCounter,
+            hash: initHash,
+            commitedMessage: AuditableChat.#commitFunction([initMetadata])
         }
-        auditableChat.updateHash(incomingMessage.hash as string);
-    })();
+        return initBlock;
+    };
+
+    static async #getPreviousMessage(chatId: string) {
+        const tabId = tabManager.getWhatsappTab().id;
+        if (!tabId) throw new Error("No tabId available");
+
+        const lastMessage = (await getChatMessages(tabId, chatId, { count: 1 }))[0];
+        if (!lastMessage) throw new Error("No message available");
+        return lastMessage;
+    }
+
+    // Ignorando a seed por enquanto
+    static async generateNewBlock(chatId: string, messageToProcess: string) {
+        const lastMessage = await AuditableChat.#getPreviousMessage(chatId);
+        let lastBlock = lastMessage.hash;
+        if (!lastBlock && lastMessage.content === AuditableChatOptions.ACCEPT) {
+            const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+            if (!auditableState?.auditableChatReference) throw new Error(`New auditable chat has no reference to chat.`);
+            lastBlock = auditableState.auditableChatReference.initialBlock;
+        }
+        if (!lastBlock) throw new Error(`No initial block found in new auditable chat.`);
+
+        const { counter, hash } = lastBlock;
+        const updatedCounter = counter + 1;
+
+        const commitedKey = await AuditableChat.#hashFunction([String(updatedCounter)]);
+        const commitedMessage = AuditableChat.#commitFunction([commitedKey, messageToProcess]);
+
+        const newHash = await AuditableChat.#hashFunction([hash, String(updatedCounter), commitedMessage]);
+        return {
+            hash: newHash,
+            previousHash: hash,
+            counter: updatedCounter,
+            commitedMessage
+        } as AuditableBlock;
+    }
+
+    static #commitFunction(itemsToHash: string[]) {
+        const concatenatedItems = itemsToHash.reduce((accumulator, currentValue) => accumulator + currentValue, "");
+
+        return concatenatedItems;
+    }
+
+    static async #hashFunction(itemsToHash: string[]) {
+        const concatenatedItems = itemsToHash.reduce((accumulator, currentValue) => accumulator + currentValue, "");
+        // 1. Encode the string as UTF-8
+        const encoder = new TextEncoder();
+        const data = encoder.encode(concatenatedItems);
+
+        // 2. Hash it
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+
+        // 3. Convert ArrayBuffer to hex string
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+
+        return hashHex;
+    }
 }
+
+// On state changes
+//chrome.storage.onChanged.addListener((changes) => {
+//    const entries = Object.entries(changes) as [string, {
+//        oldValue?: Record<string, ChatState>,
+//        newValue?: Record<string, ChatState>,
+//    }][];
+//    for (const [key, { oldValue, newValue }] of entries) {
+//        if (key !== AuditableChat.STORAGE_KEY || !oldValue || !newValue) continue;
+//
+//        const oldChatIds = Object.keys(oldValue);
+//        const newChatIds = Object.keys(newValue);
+//        const chatIds = Array.from(new Set([...oldChatIds, ...newChatIds]));
+//
+//        chatIds.forEach((chatId) => {
+//            const oldState = oldValue[chatId]?.currentState;
+//            const newState = newValue[chatId]?.currentState;
+//
+//            const oldStateIsRequest = oldState === AuditableChatStates.REQUEST_SENT || oldState === AuditableChatStates.REQUEST_RECEIVED;
+//            if (oldStateIsRequest && newState === AuditableChatStates.ONGOING) auditableChats.set(chatId, new AuditableChat(chatId));
+//        });
+//    }
+//})
 
 chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
     if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
     const incomingChatMessage = internalMessage.payload as ProcessAuditableMessage;
-    const { chatId, ...auditableMessage } = incomingChatMessage.incomingMessage;
+    const { chatId } = incomingChatMessage.incomingMessage;
+    const auditableMessage = incomingChatMessage.incomingMessage;
     console.log("IncomingMessage: ", incomingChatMessage);
 
     (async () => {
@@ -138,11 +189,29 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (currentState?.currentState === AuditableChatStates.ONGOING && auditableMessage.content === AuditableChatOptions.ACCEPT) {
             const messageId = auditableMessage.messageId;
             if (!messageId) throw new Error("Auditable MessageId not found.");
-            AuditableChatStateMachine.setAuditableStart(chatId, messageId);
+
+            const messageIdItems = messageId?.split("_");
+            const itemsLength = messageIdItems?.length;
+            if (!itemsLength) throw new Error("Auditable MessageId splited is empty.");
+            const pureMessageId = messageIdItems[itemsLength - 1];
+            console.log("Last message from listener perspective: ", auditableMessage);
+            if (!pureMessageId) throw new Error("Auditable MessageId not found.");
+
+            const initialBlock = await AuditableChat.generateInitBlock(pureMessageId);
+            AuditableChatStateMachine.setAuditableStart(chatId, messageId, initialBlock);
         }
 
         if (incomingChatMessage.toCalculateHash) {
-            processAuditableMessage(tabManager, auditableChats, incomingChatMessage.incomingMessage);
+            // Se for uma string é uma mensagem do usuário e devo processar, se não a mensagem vem de fora
+            console.log("processingAuditableMessage: ", auditableMessage)
+
+            const authorIsMe = (await AuditableChatStateMachine.getUserId()) === auditableMessage.author;
+            if (authorIsMe) {
+                auditableMessage.hash = await AuditableChat.generateNewBlock(chatId, auditableMessage.content as string);
+
+                const tabId = tabManager.getWhatsappTab().id as number;
+                await sendTextMessage(tabId, auditableMessage);
+            }
             AuditableChatStateMachine.increaseAuditableCounter(chatId);
         }
     })();
