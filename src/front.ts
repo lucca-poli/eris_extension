@@ -84,7 +84,6 @@ class DomProcessor {
                 });
                 const seed = await AuditableChatStateMachine.retrieveSeed(chatId);
                 const privateJson = JSON.stringify({
-                    chatId,
                     seed,
                     logMessages: privateLogs
                 });

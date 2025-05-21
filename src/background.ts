@@ -270,7 +270,6 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
             const authorIsMe = (await AuditableChatStateMachine.getUserId()) === auditableMessage.author;
             if (authorIsMe) {
                 const auditableContent: AuditableMessageContent = {
-                    chatId,
                     content: auditableMessage.content as string,
                     author: auditableMessage.author
                 }

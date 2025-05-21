@@ -71,7 +71,6 @@ export type AuditableMessage = {
 }
 
 export type AuditableMessageContent = {
-    chatId: string;
     content: string;
     author: string;
 }
