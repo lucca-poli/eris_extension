@@ -42,6 +42,7 @@ export type AuditableChatReference = {
 export type SendFileMessage = {
     chatId: string;
     fileContent: string;
+    fileName: string;
 }
 
 export type GetMessagesOptions = {
@@ -69,6 +70,12 @@ export type AuditableMessage = {
     timestamp?: number,
 }
 
+export type AuditableMessageContent = {
+    chatId: string;
+    content: string;
+    author: string;
+}
+
 export type AuditableBlock = {
     hash: string,
     previousHash: string,
@@ -76,3 +83,18 @@ export type AuditableBlock = {
     commitedMessage: string
 }
 
+export type PRFArgs = {
+    seed: string;
+    counter: number;
+}
+
+export type CommitArgs = {
+    commitedKey: string;
+    message: string;
+}
+
+export type HashArgs = {
+    previousHash: string;
+    counter: number;
+    commitedMessage: string;
+}

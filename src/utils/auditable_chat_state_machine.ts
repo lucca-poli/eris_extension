@@ -64,6 +64,20 @@ export class AuditableChatStateMachine {
         return this.chatId;
     }
 
+    static async retrieveSeed(chatId: string) {
+        const currentAuditableState = await AuditableChatStateMachine.getAuditable(chatId);
+        if (!currentAuditableState?.auditableChatReference) throw new Error(`No current auditable chat reference in chat with id: ${chatId}`);
+        const messageId = currentAuditableState.auditableChatReference.currentAuditableChatInitId;
+
+        const messageIdItems = messageId?.split("_");
+        const itemsLength = messageIdItems?.length;
+        if (!itemsLength) throw new Error("Auditable MessageId splited is empty.");
+        const pureMessageId = messageIdItems[itemsLength - 1];
+        if (!pureMessageId) throw new Error("Auditable MessageId not found.");
+
+        return pureMessageId;
+    }
+
     static async getAll(): Promise<Record<string, ChatState>> {
         return new Promise((resolve) => {
             chrome.storage.local.get([this.STORAGE_KEY], (result) => {

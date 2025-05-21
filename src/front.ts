@@ -69,24 +69,43 @@ class DomProcessor {
                     payload: getMessages
                 } as InternalMessage);
 
-                const logMessages = auditableMessages.map((message) => {
+                const publicLogs = auditableMessages.map((message) => message.hash as AuditableBlock);
+                const publicJson = JSON.stringify({
+                    initialBlock: auditableState.auditableChatReference.initialBlock,
+                    logMessages: publicLogs
+                });
+
+                const privateLogs = auditableMessages.map((message) => {
                     return {
                         content: message.content as string,
                         author: message.author,
-                        hash: message.hash as AuditableBlock,
+                        counter: message.hash?.counter as number,
                     };
                 });
-
-                const jsonLogs = JSON.stringify({
-                    initialBlock: auditableState.auditableChatReference.initialBlock,
-                    logMessages
+                const seed = await AuditableChatStateMachine.retrieveSeed(chatId);
+                const privateJson = JSON.stringify({
+                    chatId,
+                    seed,
+                    logMessages: privateLogs
                 });
 
-                chrome.runtime.sendMessage({
+                const dateToday = new Date().toISOString().split('T')[0];
+
+                await chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_FILE_MESSAGE,
                     payload: {
                         chatId,
-                        fileContent: jsonLogs
+                        fileContent: privateJson,
+                        fileName: `private_logs_${dateToday}.json`
+                    } as SendFileMessage
+                } as InternalMessage);
+
+                await chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_FILE_MESSAGE,
+                    payload: {
+                        chatId,
+                        fileContent: publicJson,
+                        fileName: `public_logs_${dateToday}.json`
                     } as SendFileMessage
                 } as InternalMessage);
             });

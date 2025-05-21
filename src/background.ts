@@ -1,4 +1,4 @@
-import { ActionOptions, InternalMessage, AuditableMessage, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage, GetMessages, SendFileMessage, AuditableBlock } from "./utils/types";
+import { ActionOptions, InternalMessage, AuditableMessage, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage, GetMessages, SendFileMessage, AuditableBlock, PRFArgs, CommitArgs, HashArgs, AuditableMessageContent } from "./utils/types";
 import { sendTextMessage, getChatMessages, setInputbox, sendFileMessage, getUserId } from "./utils/chrome_lib"
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
 
@@ -74,20 +74,30 @@ class AuditableChat {
 
     static async generateInitBlock(initMessageId: string): Promise<AuditableBlock> {
         const initCounter = 0;
-        const initMetadata = initMessageId;
-        const previousHash = "0000";
+        const seed = initMessageId;
+        const initMetadata = new Date().toISOString().split('T')[0];
+        console.log("Timestamp is: ", initMetadata);
+        const previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
 
-        // initMetadata pode ser ou metadata ou message_i
-        // Ignorando a seed por enquanto
-        const ck = await AuditableChat.#hashFunction([String(initCounter)]);
-        const commitedMessage = AuditableChat.#commitFunction([ck, initMetadata]);
-        const initHash = await AuditableChat.#hashFunction([previousHash, ck, commitedMessage]);
+        const commitedKey = await AuditableChat.#prf({
+            seed,
+            counter: initCounter
+        });
+        const commitedMessage = await AuditableChat.#commitFunction({
+            commitedKey,
+            message: initMetadata
+        });
+        const initHash = await AuditableChat.#hashFunction({
+            previousHash,
+            counter: initCounter,
+            commitedMessage
+        });
 
         const initBlock: AuditableBlock = {
             previousHash,
             counter: initCounter,
             hash: initHash,
-            commitedMessage: AuditableChat.#commitFunction([initMetadata])
+            commitedMessage
         }
         return initBlock;
     };
@@ -101,8 +111,7 @@ class AuditableChat {
         return lastMessage;
     }
 
-    // Ignorando a seed por enquanto
-    static async generateNewBlock(chatId: string, messageToProcess: string) {
+    static async generateNewBlock(chatId: string, messageToProcess: AuditableMessageContent) {
         const lastMessage = await AuditableChat.#getPreviousMessage(chatId);
         let lastBlock = lastMessage.hash;
         if (!lastBlock && lastMessage.content === AuditableChatOptions.ACCEPT) {
@@ -112,13 +121,25 @@ class AuditableChat {
         }
         if (!lastBlock) throw new Error(`No initial block found in new auditable chat.`);
 
+        const seed = await AuditableChatStateMachine.retrieveSeed(chatId);
+
         const { counter, hash } = lastBlock;
         const updatedCounter = counter + 1;
 
-        const commitedKey = await AuditableChat.#hashFunction([String(updatedCounter)]);
-        const commitedMessage = AuditableChat.#commitFunction([commitedKey, messageToProcess]);
+        const commitedKey = await AuditableChat.#prf({
+            seed,
+            counter: updatedCounter
+        });
+        const commitedMessage = await AuditableChat.#commitFunction({
+            commitedKey,
+            message: JSON.stringify(messageToProcess)
+        });
 
-        const newHash = await AuditableChat.#hashFunction([hash, String(updatedCounter), commitedMessage]);
+        const newHash = await AuditableChat.#hashFunction({
+            previousHash: hash,
+            counter: updatedCounter,
+            commitedMessage
+        });
         return {
             hash: newHash,
             previousHash: hash,
@@ -127,17 +148,12 @@ class AuditableChat {
         } as AuditableBlock;
     }
 
-    static #commitFunction(itemsToHash: string[]) {
-        const concatenatedItems = itemsToHash.reduce((accumulator, currentValue) => accumulator + currentValue, "");
+    static async #commitFunction(args: CommitArgs) {
+        const serializedData = JSON.stringify(args);
 
-        return concatenatedItems;
-    }
-
-    static async #hashFunction(itemsToHash: string[]) {
-        const concatenatedItems = itemsToHash.reduce((accumulator, currentValue) => accumulator + currentValue, "");
         // 1. Encode the string as UTF-8
         const encoder = new TextEncoder();
-        const data = encoder.encode(concatenatedItems);
+        const data = encoder.encode(serializedData);
 
         // 2. Hash it
         const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -149,6 +165,52 @@ class AuditableChat {
             .join('');
 
         return hashHex;
+    }
+
+    static async #hashFunction(args: HashArgs) {
+        const serializedData = JSON.stringify(args);
+
+        // 1. Encode the string as UTF-8
+        const encoder = new TextEncoder();
+        const data = encoder.encode(serializedData);
+
+        // 2. Hash it
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+
+        // 3. Convert ArrayBuffer to hex string
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+
+        return hashHex;
+    }
+
+    static async #prf(args: PRFArgs): Promise<string> {
+        const { seed, counter } = args;
+
+        const enc = new TextEncoder();
+
+        // Import the key into a CryptoKey object
+        const cryptoKey = await crypto.subtle.importKey(
+            'raw',
+            enc.encode(seed),
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign']
+        );
+
+        // Run HMAC
+        const signature = await crypto.subtle.sign(
+            'HMAC',
+            cryptoKey,
+            enc.encode(String(counter))
+        );
+
+        // Convert ArrayBuffer to hex
+        return Array.from(new Uint8Array(signature))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
     }
 }
 
@@ -207,7 +269,12 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
 
             const authorIsMe = (await AuditableChatStateMachine.getUserId()) === auditableMessage.author;
             if (authorIsMe) {
-                auditableMessage.hash = await AuditableChat.generateNewBlock(chatId, auditableMessage.content as string);
+                const auditableContent: AuditableMessageContent = {
+                    chatId,
+                    content: auditableMessage.content as string,
+                    author: auditableMessage.author
+                }
+                auditableMessage.hash = await AuditableChat.generateNewBlock(chatId, auditableContent);
 
                 const tabId = tabManager.getWhatsappTab().id as number;
                 await sendTextMessage(tabId, auditableMessage);
@@ -260,8 +327,8 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
 
     (async () => {
         const tabId = tabManager.getWhatsappTab().id as number;
-        const { chatId, fileContent } = internalMessage.payload as SendFileMessage;
-        const result = await sendFileMessage(tabId, chatId, fileContent);
+        const { chatId, fileContent, fileName } = internalMessage.payload as SendFileMessage;
+        const result = await sendFileMessage(tabId, chatId, fileContent, fileName);
         if (!result) throw new Error("Could not send file.");
     })();
 });
