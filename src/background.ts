@@ -1,4 +1,4 @@
-import { ActionOptions, InternalMessage, AuditableMessage, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage, GetMessages, SendFileMessage, AuditableBlock, PRFArgs, CommitArgs, HashArgs, AuditableMessageContent } from "./utils/types";
+import { ActionOptions, InternalMessage, AuditableMessage, AuditableChatStates, AuditableChatOptions, ProcessAuditableMessage, GetMessages, SendFileMessage, AuditableBlock, PRFArgs, CommitArgs, HashArgs, AuditableMessageContent, GetCommitedKeys } from "./utils/types";
 import { sendTextMessage, getChatMessages, setInputbox, sendFileMessage, getUserId } from "./utils/chrome_lib"
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
 
@@ -79,7 +79,7 @@ class AuditableChat {
         console.log("Timestamp is: ", initMetadata);
         const previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
 
-        const commitedKey = await AuditableChat.#prf({
+        const commitedKey = await AuditableChat.prf({
             seed,
             counter: initCounter
         });
@@ -126,7 +126,7 @@ class AuditableChat {
         const { counter, hash } = lastBlock;
         const updatedCounter = counter + 1;
 
-        const commitedKey = await AuditableChat.#prf({
+        const commitedKey = await AuditableChat.prf({
             seed,
             counter: updatedCounter
         });
@@ -186,7 +186,7 @@ class AuditableChat {
         return hashHex;
     }
 
-    static async #prf(args: PRFArgs): Promise<string> {
+    static async prf(args: PRFArgs): Promise<string> {
         const { seed, counter } = args;
 
         const enc = new TextEncoder();
@@ -303,6 +303,26 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender,
         //
         // Cannot send complex objects
         sendResponse(messages);
+    })();
+
+    return true;
+});
+
+chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender, sendResponse) => {
+    if (internalMessage.action !== ActionOptions.GET_COMMITED_KEYS) return;
+
+    const { seed, counters } = internalMessage.payload as GetCommitedKeys;
+
+    (async () => {
+        const keys = counters.map(async (counter) => {
+            return AuditableChat.prf({
+                seed,
+                counter
+            })
+        });
+        const commitedKeys = await Promise.all(keys);
+        // Cannot send complex objects
+        sendResponse(commitedKeys);
     })();
 
     return true;

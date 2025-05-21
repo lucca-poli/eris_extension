@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "./utils/types"
+import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -75,16 +75,27 @@ class DomProcessor {
                     logMessages: publicLogs
                 });
 
-                const privateLogs = auditableMessages.map((message) => {
+                const seed = await AuditableChatStateMachine.retrieveSeed(chatId);
+                const counters = [0].concat(publicLogs.map((hashblock) => hashblock.counter))
+                const commitedKeys: string[] = await chrome.runtime.sendMessage({
+                    action: ActionOptions.GET_COMMITED_KEYS,
+                    payload: { counters, seed } as GetCommitedKeys
+                } as InternalMessage);
+
+                const privateLogs = auditableMessages.map((message, index) => {
+                    const commitedKey = commitedKeys[index]
+                    if (!commitedKey) {
+                        console.error(message);
+                        throw new Error("No counter for HashBlock.");
+                    }
                     return {
                         content: message.content as string,
                         author: message.author,
-                        counter: message.hash?.counter as number,
+                        commitedKey
                     };
                 });
-                const seed = await AuditableChatStateMachine.retrieveSeed(chatId);
                 const privateJson = JSON.stringify({
-                    seed,
+                    initialCommitedKey: commitedKeys[0],
                     logMessages: privateLogs
                 });
 

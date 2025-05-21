@@ -2,6 +2,7 @@ export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
     GET_MESSAGES = "GET_MESSAGES",
+    GET_COMMITED_KEYS = "GET_COMMITED_KEYS",
     SET_INPUT_BOX = "SET_INPUT_BOX",
     SEND_TEXT_MESSAGE = "SEND_TEXT_MESSAGE",
     SEND_FILE_MESSAGE = "SEND_FILE_MESSAGE",
@@ -85,6 +86,11 @@ export type AuditableBlock = {
 export type PRFArgs = {
     seed: string;
     counter: number;
+}
+
+export type GetCommitedKeys = {
+    seed: string;
+    counters: number[];
 }
 
 export type CommitArgs = {
