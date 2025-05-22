@@ -130,6 +130,10 @@ class AuditableChat {
             seed,
             counter: updatedCounter
         });
+        console.log("commited args: ", {
+            commitedKey,
+            message: JSON.stringify(messageToProcess)
+        } as CommitArgs)
         const commitedMessage = await AuditableChat.#commitFunction({
             commitedKey,
             message: JSON.stringify(messageToProcess)

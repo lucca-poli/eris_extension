@@ -81,9 +81,11 @@ class DomProcessor {
                     action: ActionOptions.GET_COMMITED_KEYS,
                     payload: { counters, seed } as GetCommitedKeys
                 } as InternalMessage);
+                console.log("commited keys: ", commitedKeys)
 
                 const privateLogs = auditableMessages.map((message, index) => {
-                    const commitedKey = commitedKeys[index]
+                    // Skiping first commitedKey from initialBlock
+                    const commitedKey = commitedKeys[index + 1]
                     if (!commitedKey) {
                         console.error(message);
                         throw new Error("No counter for HashBlock.");
@@ -91,7 +93,8 @@ class DomProcessor {
                     return {
                         content: message.content as string,
                         author: message.author,
-                        commitedKey
+                        commitedKey,
+                        counter: counters[index + 1]
                     };
                 });
                 const privateJson = JSON.stringify({
