@@ -251,7 +251,8 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
 
     (async () => {
         const currentState = await AuditableChatStateMachine.getAuditable(chatId);
-        // Vai bugar se o cara mandar a mesma mensagem de aceite
+        // InitBlock generation
+        // Vai bugar se o cara mandar a mesma mensagem de aceite durante um chat auditável
         if (currentState?.currentState === AuditableChatStates.ONGOING && auditableMessage.content === AuditableChatOptions.ACCEPT) {
             const messageId = auditableMessage.messageId;
             if (!messageId) throw new Error("Auditable MessageId not found.");
@@ -267,8 +268,8 @@ chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
             AuditableChatStateMachine.setAuditableStart(chatId, messageId, initialBlock);
         }
 
+        // Generate hash block and send it with message if it comes from sender
         if (incomingChatMessage.toCalculateHash) {
-            // Se for uma string é uma mensagem do usuário e devo processar, se não a mensagem vem de fora
             console.log("processingAuditableMessage: ", auditableMessage)
 
             const authorIsMe = (await AuditableChatStateMachine.getUserId()) === auditableMessage.author;
