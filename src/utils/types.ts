@@ -2,6 +2,7 @@ export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
     GET_MESSAGES = "GET_MESSAGES",
+    GET_COMMITED_KEYS = "GET_COMMITED_KEYS",
     SET_INPUT_BOX = "SET_INPUT_BOX",
     SEND_TEXT_MESSAGE = "SEND_TEXT_MESSAGE",
     SEND_FILE_MESSAGE = "SEND_FILE_MESSAGE",
@@ -42,6 +43,7 @@ export type AuditableChatReference = {
 export type SendFileMessage = {
     chatId: string;
     fileContent: string;
+    fileName: string;
 }
 
 export type GetMessagesOptions = {
@@ -69,6 +71,11 @@ export type AuditableMessage = {
     timestamp?: number,
 }
 
+export type AuditableMessageContent = {
+    content: string;
+    author: string;
+}
+
 export type AuditableBlock = {
     hash: string,
     previousHash: string,
@@ -76,3 +83,23 @@ export type AuditableBlock = {
     commitedMessage: string
 }
 
+export type PRFArgs = {
+    seed: string;
+    counter: number;
+}
+
+export type GetCommitedKeys = {
+    seed: string;
+    counters: number[];
+}
+
+export type CommitArgs = {
+    commitedKey: string;
+    message: string;
+}
+
+export type HashArgs = {
+    previousHash: string;
+    counter: number;
+    commitedMessage: string;
+}

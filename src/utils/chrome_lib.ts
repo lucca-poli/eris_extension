@@ -50,16 +50,16 @@ export async function sendTextMessage(tabId: number, chatMessage: AuditableMessa
     return result;
 }
 
-export async function sendFileMessage(tabId: number, chatId: string, fileContent: string) {
+export async function sendFileMessage(tabId: number, chatId: string, fileContent: string, fileName: string) {
     const [{ result }] = await chrome.scripting.executeScript({
-        func: (chatId: string, fileContent: string) => {
+        func: (chatId: string, fileContent: string, fileName: string) => {
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
 
-            const file = new File([fileContent], 'data.json', { type: 'application/json' });
+            const file = new File([fileContent], fileName, { type: 'application/json' });
             return WhatsappLayer.chat.sendFileMessage(chatId, file, { type: "document" });
         },
-        args: [chatId, fileContent],
+        args: [chatId, fileContent, fileName],
         target: { tabId },
         world: 'MAIN',
     });

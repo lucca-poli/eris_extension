@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "./utils/types"
+import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -69,24 +69,56 @@ class DomProcessor {
                     payload: getMessages
                 } as InternalMessage);
 
-                const logMessages = auditableMessages.map((message) => {
+                const publicLogs = auditableMessages.map((message) => message.hash as AuditableBlock);
+                const publicJson = JSON.stringify({
+                    initialBlock: auditableState.auditableChatReference.initialBlock,
+                    logMessages: publicLogs
+                });
+
+                const seed = await AuditableChatStateMachine.retrieveSeed(chatId);
+                const counters = [0].concat(publicLogs.map((hashblock) => hashblock.counter))
+                const commitedKeys: string[] = await chrome.runtime.sendMessage({
+                    action: ActionOptions.GET_COMMITED_KEYS,
+                    payload: { counters, seed } as GetCommitedKeys
+                } as InternalMessage);
+                console.log("commited keys: ", commitedKeys)
+
+                const privateLogs = auditableMessages.map((message, index) => {
+                    // Skiping first commitedKey from initialBlock
+                    const commitedKey = commitedKeys[index + 1]
+                    if (!commitedKey) {
+                        console.error(message);
+                        throw new Error("No counter for HashBlock.");
+                    }
                     return {
                         content: message.content as string,
                         author: message.author,
-                        hash: message.hash as AuditableBlock,
+                        commitedKey,
+                        counter: counters[index + 1]
                     };
                 });
-
-                const jsonLogs = JSON.stringify({
-                    initialBlock: auditableState.auditableChatReference.initialBlock,
-                    logMessages
+                const privateJson = JSON.stringify({
+                    initialCommitedKey: commitedKeys[0],
+                    logMessages: privateLogs
                 });
 
-                chrome.runtime.sendMessage({
+                const dateToday = new Date().toISOString().split('T')[0];
+
+                await chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_FILE_MESSAGE,
                     payload: {
                         chatId,
-                        fileContent: jsonLogs
+                        fileContent: privateJson,
+                        fileName: `private_logs_${dateToday}.json`
+                    } as SendFileMessage
+                } as InternalMessage);
+
+                await chrome.runtime.sendMessage({
+                    action: ActionOptions.SEND_FILE_MESSAGE,
+                    payload: {
+                        chatId,
+                        fileContent: publicJson,
+                        fileName: `public_logs_${dateToday}.json`
                     } as SendFileMessage
                 } as InternalMessage);
             });
