@@ -1,6 +1,7 @@
 export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
+    GENERATE_AND_SEND_BLOCK = "GENERATE_AND_SEND_BLOCK",
     GET_MESSAGES = "GET_MESSAGES",
     GET_COMMITED_KEYS = "GET_COMMITED_KEYS",
     SET_INPUT_BOX = "SET_INPUT_BOX",
@@ -57,11 +58,6 @@ export type GetMessages = {
     options: GetMessagesOptions
 }
 
-export type ProcessAuditableMessage = {
-    incomingMessage: AuditableMessage,
-    toCalculateHash: boolean
-}
-
 export type AuditableMessage = {
     chatId: string,
     messageId?: string,
@@ -86,6 +82,12 @@ export type AuditableBlock = {
 export type PRFArgs = {
     seed: string;
     counter: number;
+}
+
+export type RandomSeedSalt = {
+    chatId: string,
+    userId: string,
+    currentTime: number
 }
 
 export type GetCommitedKeys = {

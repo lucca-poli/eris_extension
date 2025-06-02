@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "./utils/types"
+import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -51,7 +51,6 @@ class DomProcessor {
                     } as AuditableMessage
                 } as InternalMessage);
 
-                // Contruir o JSON
                 const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
                 if (!auditableState) throw new Error("There should be a conversation created.");
                 if (!auditableState.auditableChatReference) throw new Error("There should be a auditable chat reference.");
@@ -261,15 +260,12 @@ class DomProcessor {
                 if (auditableChatbox?.textContent?.length === 0) return; // do nothing on messages with no text
 
                 chrome.runtime.sendMessage({
-                    action: ActionOptions.PROPAGATE_NEW_MESSAGE,
+                    action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
-                        incomingMessage: {
-                            content: auditableChatbox.textContent,
-                            chatId,
-                            author: await AuditableChatStateMachine.getUserId()
-                        },
-                        toCalculateHash: true
-                    } as ProcessAuditableMessage,
+                        content: auditableChatbox.textContent,
+                        chatId,
+                        author: await AuditableChatStateMachine.getUserId()
+                    } as AuditableMessage,
                 } as InternalMessage);
 
                 // @ts-ignore
@@ -329,14 +325,11 @@ window.addEventListener("message", async (event: MessageEvent) => {
         domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
     }
 
-    const authorIsMe = (await AuditableChatStateMachine.getUserId()) === incomingChatMessage.author;
-    const toProcess = !authorIsMe && incomingChatMessage.hash
+    // Se a mensagem for de um chat auditavel eu mando pro back processar
+    if (!incomingChatMessage.hash) return;
     chrome.runtime.sendMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,
-        payload: {
-            incomingMessage: incomingChatMessage,
-            toCalculateHash: toProcess
-        } as ProcessAuditableMessage,
+        payload: incomingChatMessage as AuditableMessage,
     } as InternalMessage);
 });
 

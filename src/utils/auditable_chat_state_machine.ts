@@ -1,4 +1,4 @@
-import { AuditableBlock, AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
+import { AuditableBlock, AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState, RandomSeedSalt } from "./types";
 
 export class AuditableChatStateMachine {
     private chatId: string;

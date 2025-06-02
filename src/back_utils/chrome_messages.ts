@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableChatOptions, AuditableChatStates, AuditableMessage, AuditableMessageContent, GetCommitedKeys, GetMessages, InternalMessage, ProcessAuditableMessage, SendFileMessage } from "../utils/types";
+import { ActionOptions, AuditableChatOptions, AuditableChatStates, AuditableMessage, AuditableMessageContent, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
 import { AuditableChat } from "./auditable_chat";
 import { getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
@@ -9,10 +9,9 @@ export function setupChromeListeners(tabManager: TabManager) {
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
-        const incomingChatMessage = internalMessage.payload as ProcessAuditableMessage;
-        const { chatId } = incomingChatMessage.incomingMessage;
-        const auditableMessage = incomingChatMessage.incomingMessage;
-        console.log("IncomingMessage: ", incomingChatMessage);
+        const auditableMessage = internalMessage.payload as AuditableMessage;
+        const { chatId } = auditableMessage;
+        console.log("IncomingMessage: ", auditableMessage);
 
         (async () => {
             const currentState = await AuditableChatStateMachine.getAuditable(chatId);
@@ -22,36 +21,30 @@ export function setupChromeListeners(tabManager: TabManager) {
                 const messageId = auditableMessage.messageId;
                 if (!messageId) throw new Error("Auditable MessageId not found.");
 
-                const messageIdItems = messageId?.split("_");
-                const itemsLength = messageIdItems?.length;
-                if (!itemsLength) throw new Error("Auditable MessageId splited is empty.");
-                const pureMessageId = messageIdItems[itemsLength - 1];
-                console.log("Last message from listener perspective: ", auditableMessage);
-                if (!pureMessageId) throw new Error("Auditable MessageId not found.");
-
-                const initialBlock = await AuditableChat.generateInitBlock(pureMessageId);
+                const initialBlock = await AuditableChat.generateInitBlock(chatId);
                 AuditableChatStateMachine.setAuditableStart(chatId, messageId, initialBlock);
             }
 
-            // Generate hash block and send it with message if it comes from sender
-            if (incomingChatMessage.toCalculateHash) {
-                console.log("processingAuditableMessage: ", auditableMessage)
-
-                const authorIsMe = (await AuditableChatStateMachine.getUserId()) === auditableMessage.author;
-                if (authorIsMe) {
-                    const auditableContent: AuditableMessageContent = {
-                        content: auditableMessage.content as string,
-                        author: auditableMessage.author
-                    }
-                    const tabId = tabManager.getWhatsappTab().id as number;
-                    auditableMessage.hash = await AuditableChat.generateNewBlock(tabId, chatId, auditableContent);
-
-                    await sendTextMessage(tabId, auditableMessage);
-                }
-                AuditableChatStateMachine.increaseAuditableCounter(chatId);
-            }
+            AuditableChatStateMachine.increaseAuditableCounter(chatId);
         })();
+    });
 
+    chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
+        if (internalMessage.action !== ActionOptions.GENERATE_AND_SEND_BLOCK) return;
+
+        const auditableMessage = internalMessage.payload as AuditableMessage;
+        const chatId = auditableMessage.chatId;
+        const tabId = tabManager.getWhatsappTab().id as number;
+
+        (async () => {
+            const auditableContent: AuditableMessageContent = {
+                content: auditableMessage.content as string,
+                author: auditableMessage.author
+            }
+            auditableMessage.hash = await AuditableChat.generateNewBlock(tabId, chatId, auditableContent);
+
+            await sendTextMessage(tabId, auditableMessage);
+        })();
     });
 
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {

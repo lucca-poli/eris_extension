@@ -1,6 +1,6 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
 import { getChatMessages } from "../utils/chrome_lib";
-import { AuditableBlock, AuditableChatOptions, AuditableMessageContent, CommitArgs, HashArgs, PRFArgs } from "../utils/types";
+import { AuditableBlock, AuditableChatOptions, AuditableMessageContent, CommitArgs, HashArgs, PRFArgs, RandomSeedSalt } from "../utils/types";
 
 export class AuditableChat {
     static STORAGE_KEY = 'chats';
@@ -17,9 +17,33 @@ export class AuditableChat {
     //    return auditableReference.auditableMessagesCounter
     //}
 
-    static async generateInitBlock(initMessageId: string): Promise<AuditableBlock> {
+    static async #generateAuditableSeed(chatId: string): Promise<string> {
+        const userId = await AuditableChatStateMachine.getUserId();
+        if (!userId) throw new Error("No userId found.");
+
+        const seedSaltObject: RandomSeedSalt = {
+            currentTime: Date.now(),
+            chatId,
+            userId,
+        };
+        const seedSalt = JSON.stringify(seedSaltObject);
+
+        const encoder = new TextEncoder();
+        const data = encoder.encode(seedSalt);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = new Uint8Array(hashBuffer);
+
+        // Convert to a number seed (32-bit)
+        const randomNumber = (hashArray[0] << 24) | (hashArray[1] << 16) | (hashArray[2] << 8) | hashArray[3];
+        const length = 8;
+        const seed = randomNumber.toString(16).padStart(length, '0');
+        return (seed.charAt(0) === '-') ? seed.slice(1) : seed; // Convert to unsigned 32-bit integer
+    }
+
+
+    static async generateInitBlock(chatId: string): Promise<AuditableBlock> {
         const initCounter = 0;
-        const seed = initMessageId;
+        const seed = await AuditableChat.#generateAuditableSeed(chatId);
         const initMetadata = new Date().toISOString().split('T')[0];
         console.log("Timestamp is: ", initMetadata);
         const previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
