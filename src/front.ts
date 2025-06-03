@@ -1,6 +1,6 @@
 import { AuditableChat } from "./back_utils/auditable_chat";
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, AuditableStartMetadata, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
+import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -70,8 +70,9 @@ class DomProcessor {
                     action: ActionOptions.GET_MESSAGES,
                     payload: getMessages
                 } as InternalMessage);
+                console.log("Auditable Messages: ", auditableMessages);
 
-                const publicLogs = auditableMessages.map((message) => message.hash as AuditableBlock);
+                const publicLogs = auditableMessages.map((message) => message.metadata?.block as AuditableBlock);
                 const publicJson = JSON.stringify({
                     logMessages: publicLogs
                 });
@@ -79,8 +80,6 @@ class DomProcessor {
                 console.log("Public Logs: ", publicLogs);
                 const seed = auditableState.auditableChatReference?.auditableChatSeed;
                 const counters = publicLogs.map((hashblock) => hashblock.counter);
-                // TODO -> retirar esse assignment porque o objecto com todos os campos flattened já vai funcionar (block, seed? e signatures[] no futuro)
-                counters[0] = 0;
                 console.log("counters: ", counters);
                 const commitedKeys: string[] = await chrome.runtime.sendMessage({
                     action: ActionOptions.GET_COMMITED_KEYS,
@@ -165,11 +164,13 @@ class DomProcessor {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
-                        chatId,
-                        content: AuditableChatOptions.ACCEPT,
-                        author: await AuditableChatStateMachine.getUserId(),
-                        seed,
-                    } as AuditableMessage
+                        currentMessage: {
+                            chatId,
+                            content: AuditableChatOptions.ACCEPT,
+                            author: await AuditableChatStateMachine.getUserId(),
+                        },
+                        toGenerateSeed: true,
+                    } as GenerateAuditableMessage,
                 } as InternalMessage);
             });
 
@@ -270,11 +271,15 @@ class DomProcessor {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
-                        content: auditableChatbox.textContent,
-                        chatId,
-                        author: await AuditableChatStateMachine.getUserId()
-                    } as AuditableMessage,
+                        currentMessage: {
+                            content: auditableChatbox.textContent,
+                            chatId,
+                            author: await AuditableChatStateMachine.getUserId()
+                        },
+                        toGenerateSeed: false,
+                    } as GenerateAuditableMessage,
                 } as InternalMessage);
+
 
                 // @ts-ignore
                 auditableChatbox?.textContent = '';
@@ -334,10 +339,10 @@ window.addEventListener("message", async (event: MessageEvent) => {
     }
 
     // Se a mensagem for de um chat auditavel eu mando pro back processar
-    if (!incomingChatMessage.hash) return;
+    if (!incomingChatMessage.metadata) return;
     chrome.runtime.sendMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,
-        payload: incomingChatMessage as AuditableMessage | AuditableStartMetadata,
+        payload: incomingChatMessage as AuditableMessage,
     } as InternalMessage);
 });
 

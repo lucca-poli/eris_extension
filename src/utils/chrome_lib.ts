@@ -1,4 +1,4 @@
-import { AuditableMessage, GetMessagesOptions } from "./types";
+import { AuditableMessage, AuditableMessageMetadata, GetMessagesOptions } from "./types";
 import WPP from "@wppconnect/wa-js"
 
 export function setInputbox(tabId: number, message: string) {
@@ -28,22 +28,22 @@ export async function getUserId(tabId: number) {
 }
 
 export async function sendTextMessage(tabId: number, chatMessage: AuditableMessage) {
-    const { chatId, content, hash } = chatMessage;
-    const hashString = hash ? JSON.stringify(hash) : "";
+    const { chatId, content, metadata } = chatMessage;
+    const metadataString = metadata ? JSON.stringify(metadata) : "";
     const [{ result }] = await chrome.scripting.executeScript({
-        func: (chatId: string, content: string, hash?: string) => {
+        func: (chatId: string, content: string, metadata?: string) => {
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
 
-            if (hash) return WhatsappLayer.chat.sendTextMessage(chatId, content, {
+            if (metadata) return WhatsappLayer.chat.sendTextMessage(chatId, content, {
                 // @ts-ignore: talvez de merda depois ignorar esse erro
                 linkPreview: {
-                    description: hash,
+                    description: metadata,
                 }
             });
             return WhatsappLayer.chat.sendTextMessage(chatId, content);
         },
-        args: [chatId, content as string, hashString],
+        args: [chatId, content as string, metadataString],
         target: { tabId },
         world: 'MAIN',
     });
@@ -86,12 +86,12 @@ export async function getChatMessages(tabId: number, chatId: string, options?: G
                     .then((messages) => {
                         const auditableMessages = messages.map((message) => {
                             const auditableBlockString = message.description as string | undefined;
-                            const hash = auditableBlockString ? JSON.parse(auditableBlockString) : undefined;
+                            const metadata: AuditableMessageMetadata = auditableBlockString ? JSON.parse(auditableBlockString) : undefined;
                             return {
                                 content: message.body,
                                 author: message.from?._serialized,
                                 chatId: message.id?.remote._serialized,
-                                hash,
+                                metadata,
                                 messageId: message.id?._serialized,
                                 timestamp: message.t
                             } as AuditableMessage;

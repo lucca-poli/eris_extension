@@ -1,4 +1,4 @@
-import { AuditableBlock, AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
+import { AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
 
 export class AuditableChatStateMachine {
     private chatId: string;
@@ -14,6 +14,7 @@ export class AuditableChatStateMachine {
     static async updateState(chatId: string, incomingMessage: AuditableMessage): Promise<ChatState | undefined> {
         const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
         const auditableChat = new AuditableChatStateMachine(chatId, auditableState?.currentState);
+        const incomingMetadata = incomingMessage.metadata;
 
         switch (auditableChat.getCurrentState()) {
             case AuditableChatStates.IDLE:
@@ -28,16 +29,15 @@ export class AuditableChatStateMachine {
                 break;
             case AuditableChatStates.REQUEST_SENT:
                 if (incomingMessage.content === AuditableChatOptions.ACCEPT) {
-                    const { seed } = incomingMessage;
-                    if (!seed) throw new Error("Seed not sent in acceptation message.");
+                    const seed = incomingMetadata?.seed;
+                    if (!seed) {
+                        console.error("Acceptation message: ", incomingMessage);
+                        throw new Error("Seed not sent in acceptation message.");
+                    }
+
                     await AuditableChatStateMachine.setAuditableStart(chatId, seed);
 
-                    const currentBlock = incomingMessage.hash as AuditableBlock | undefined;
-                    const updatedHash = currentBlock?.hash;
-                    if (!updatedHash) {
-                        console.error(incomingMessage);
-                        throw new Error("New message doesn't contain previousHash field.");
-                    };
+                    const updatedHash = incomingMetadata.block.hash;
                     await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
 
                     auditableChat.currentState = AuditableChatStates.ONGOING;
@@ -47,12 +47,11 @@ export class AuditableChatStateMachine {
             case AuditableChatStates.REQUEST_RECEIVED:
                 if (incomingMessage.content === AuditableChatOptions.ACCEPT) {
                     // Já é dado o setAuditableStart quando o usuário clica no botão de aceite
-                    const currentBlock = incomingMessage.hash as AuditableBlock | undefined;
-                    const updatedHash = currentBlock?.hash;
-                    if (!updatedHash) {
+                    if (!incomingMetadata) {
                         console.error(incomingMessage);
-                        throw new Error("New message doesn't contain previousHash field.");
+                        throw new Error("New message doesn't contain metadata field.");
                     };
+                    const updatedHash = incomingMetadata.block.hash;
                     await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
 
                     auditableChat.currentState = AuditableChatStates.ONGOING;
@@ -66,12 +65,11 @@ export class AuditableChatStateMachine {
                     break;
                 }
 
-                const currentBlock = incomingMessage.hash as AuditableBlock | undefined;
-                const updatedHash = currentBlock?.hash;
-                if (!updatedHash) {
+                if (!incomingMetadata) {
                     console.error(incomingMessage);
-                    throw new Error("New message doesn't contain previousHash field.");
+                    throw new Error("New message doesn't contain metadata field.");
                 };
+                const updatedHash = incomingMetadata.block.hash;
                 await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
                 break;
             default:

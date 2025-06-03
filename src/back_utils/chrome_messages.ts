@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableBlock, AuditableChatMetadata, AuditableMessage, AuditableMessageContent, AuditableStartMetadata, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
+import { ActionOptions, AuditableChatMetadata, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
 import { AuditableChat } from "./auditable_chat";
 import { getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
@@ -10,44 +10,42 @@ export function setupChromeListeners(tabManager: TabManager) {
         if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
         const auditableMessage = internalMessage.payload as AuditableMessage;
-        const { chatId } = auditableMessage;
         console.log("IncomingMessage: ", auditableMessage);
 
-        (async () => {
-            const currentBlock = auditableMessage.hash as AuditableBlock | undefined;
-            const updatedHash = currentBlock?.hash;
-            if (!updatedHash) {
-                console.error(auditableMessage);
-                throw new Error("New message doesn't contain previousHash field.");
-            }
-        })();
+        //(async () => {
+        //})();
     });
 
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.GENERATE_AND_SEND_BLOCK) return;
 
-        const auditableMessage = internalMessage.payload as AuditableMessage;
-        const chatId = auditableMessage.chatId;
+        const { currentMessage, toGenerateSeed } = internalMessage.payload as GenerateAuditableMessage;
+        const chatId = currentMessage.chatId;
         const tabId = tabManager.getWhatsappTab().id as number;
 
         (async () => {
-            if (auditableMessage.seed) {
+            if (toGenerateSeed) {
+                const seed = await AuditableChat.generateAuditableSeed(chatId);
                 const auditableMetadata: AuditableChatMetadata = {
                     timestamp: new Date().toISOString().split('T')[0]
                 }
-                auditableMessage.hash = {
-                    seed: auditableMessage.seed,
-                    initialBlock: await AuditableChat.generateBlock(chatId, auditableMetadata)
-                } as AuditableStartMetadata;
+                currentMessage.metadata = {
+                    block: await AuditableChat.generateBlock(chatId, auditableMetadata),
+                    seed
+                } as AuditableMessageMetadata;
             } else {
                 const auditableContent: AuditableMessageContent = {
-                    content: auditableMessage.content as string,
-                    author: auditableMessage.author
+                    content: currentMessage.content as string,
+                    author: currentMessage.author
                 }
-                auditableMessage.hash = await AuditableChat.generateBlock(chatId, auditableContent);
+
+                currentMessage.metadata = {
+                    block: await AuditableChat.generateBlock(chatId, auditableContent),
+                    seed: undefined
+                } as AuditableMessageMetadata;
             }
 
-            await sendTextMessage(tabId, auditableMessage);
+            await sendTextMessage(tabId, currentMessage);
         })();
     });
 

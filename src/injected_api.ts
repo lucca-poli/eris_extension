@@ -1,6 +1,6 @@
 import "@wppconnect/wa-js"
 import WPP from "@wppconnect/wa-js"
-import { ActionOptions, InternalMessage, AuditableMessage, AuditableBlock, AuditableStartMetadata } from "./utils/types";
+import { ActionOptions, InternalMessage, AuditableMessage, AuditableMessageMetadata } from "./utils/types";
 
 // @ts-ignore
 const WhatsappLayer: typeof WPP = window.WPP;
@@ -8,24 +8,13 @@ const WhatsappLayer: typeof WPP = window.WPP;
 WhatsappLayer.on('chat.new_message', async (chatMessage) => {
     const auditableBlockString = chatMessage.description as string | undefined;
 
-    const unknownMetadata: AuditableBlock | AuditableStartMetadata | undefined = auditableBlockString ? JSON.parse(auditableBlockString) : undefined;
-    let seed: string | undefined, hash: AuditableBlock | undefined;
-    if (unknownMetadata && (unknownMetadata as AuditableStartMetadata).initialBlock) {
-        const metadata = unknownMetadata as AuditableStartMetadata;
-        hash = metadata.initialBlock;
-        seed = metadata.seed;
-    } else {
-        const metadata = unknownMetadata as AuditableBlock;
-        hash = metadata;
-        seed = undefined;
-    }
+    const metadata: AuditableMessageMetadata = auditableBlockString ? JSON.parse(auditableBlockString) : undefined;
 
     const arrivedMessage: AuditableMessage = {
         content: chatMessage.body,
         chatId: chatMessage.id?.remote?._serialized as string,
         author: chatMessage.from?._serialized as string,
-        hash,
-        seed,
+        metadata,
         messageId: chatMessage.id._serialized,
         timestamp: chatMessage.t,
     };

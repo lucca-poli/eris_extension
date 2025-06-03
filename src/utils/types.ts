@@ -63,14 +63,18 @@ export type AuditableMessage = {
     messageId?: string;
     content?: string;
     author: string;
-    hash?: AuditableBlock | AuditableStartMetadata;
-    seed?: string;
+    metadata?: AuditableMessageMetadata;
     timestamp?: number;
 }
 
 export type AuditableMessageContent = {
     content: string;
     author: string;
+}
+
+export type GenerateAuditableMessage = {
+    currentMessage: AuditableMessage;
+    toGenerateSeed: boolean;
 }
 
 export type AuditableChatMetadata = {
@@ -84,9 +88,9 @@ export type AuditableBlock = {
     commitedMessage: string
 }
 
-export type AuditableStartMetadata = {
-    seed: string;
-    initialBlock: AuditableBlock;
+export type AuditableMessageMetadata = {
+    block: AuditableBlock;
+    seed?: string;
 }
 
 export type PRFArgs = {
