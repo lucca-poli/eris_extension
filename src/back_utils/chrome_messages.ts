@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableChatOptions, AuditableChatStates, AuditableMessage, AuditableMessageContent, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
+import { ActionOptions, AuditableBlock, AuditableChatMetadata, AuditableMessage, AuditableMessageContent, AuditableStartMetadata, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
 import { AuditableChat } from "./auditable_chat";
 import { getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
@@ -14,18 +14,12 @@ export function setupChromeListeners(tabManager: TabManager) {
         console.log("IncomingMessage: ", auditableMessage);
 
         (async () => {
-            const currentState = await AuditableChatStateMachine.getAuditable(chatId);
-            // InitBlock generation
-            // Vai bugar se o cara mandar a mesma mensagem de aceite durante um chat auditável
-            if (currentState?.currentState === AuditableChatStates.ONGOING && auditableMessage.content === AuditableChatOptions.ACCEPT) {
-                const messageId = auditableMessage.messageId;
-                if (!messageId) throw new Error("Auditable MessageId not found.");
-
-                const initialBlock = await AuditableChat.generateInitBlock(chatId);
-                AuditableChatStateMachine.setAuditableStart(chatId, messageId, initialBlock);
+            const currentBlock = auditableMessage.hash as AuditableBlock | undefined;
+            const updatedHash = currentBlock?.hash;
+            if (!updatedHash) {
+                console.error(auditableMessage);
+                throw new Error("New message doesn't contain previousHash field.");
             }
-
-            AuditableChatStateMachine.increaseAuditableCounter(chatId);
         })();
     });
 
@@ -37,11 +31,21 @@ export function setupChromeListeners(tabManager: TabManager) {
         const tabId = tabManager.getWhatsappTab().id as number;
 
         (async () => {
-            const auditableContent: AuditableMessageContent = {
-                content: auditableMessage.content as string,
-                author: auditableMessage.author
+            if (auditableMessage.seed) {
+                const auditableMetadata: AuditableChatMetadata = {
+                    timestamp: new Date().toISOString().split('T')[0]
+                }
+                auditableMessage.hash = {
+                    seed: auditableMessage.seed,
+                    initialBlock: await AuditableChat.generateBlock(chatId, auditableMetadata)
+                } as AuditableStartMetadata;
+            } else {
+                const auditableContent: AuditableMessageContent = {
+                    content: auditableMessage.content as string,
+                    author: auditableMessage.author
+                }
+                auditableMessage.hash = await AuditableChat.generateBlock(chatId, auditableContent);
             }
-            auditableMessage.hash = await AuditableChat.generateNewBlock(tabId, chatId, auditableContent);
 
             await sendTextMessage(tabId, auditableMessage);
         })();

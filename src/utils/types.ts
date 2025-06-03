@@ -36,9 +36,9 @@ export type ChatState = {
 }
 
 export type AuditableChatReference = {
-    currentAuditableChatInitId: string,
-    auditableMessagesCounter: number,
-    initialBlock: AuditableBlock
+    auditableChatSeed: string;
+    counter: number;
+    previousHash: string;
 }
 
 export type SendFileMessage = {
@@ -59,12 +59,13 @@ export type GetMessages = {
 }
 
 export type AuditableMessage = {
-    chatId: string,
-    messageId?: string,
-    content?: string,
-    author: string,
-    hash?: AuditableBlock,
-    timestamp?: number,
+    chatId: string;
+    messageId?: string;
+    content?: string;
+    author: string;
+    hash?: AuditableBlock | AuditableStartMetadata;
+    seed?: string;
+    timestamp?: number;
 }
 
 export type AuditableMessageContent = {
@@ -72,11 +73,20 @@ export type AuditableMessageContent = {
     author: string;
 }
 
+export type AuditableChatMetadata = {
+    timestamp: string;
+}
+
 export type AuditableBlock = {
     hash: string,
     previousHash: string,
     counter: number,
     commitedMessage: string
+}
+
+export type AuditableStartMetadata = {
+    seed: string;
+    initialBlock: AuditableBlock;
 }
 
 export type PRFArgs = {

@@ -1,6 +1,5 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { getChatMessages } from "../utils/chrome_lib";
-import { AuditableBlock, AuditableChatOptions, AuditableMessageContent, CommitArgs, HashArgs, PRFArgs, RandomSeedSalt } from "../utils/types";
+import { AuditableBlock, AuditableChatMetadata, AuditableMessageContent, CommitArgs, HashArgs, PRFArgs, RandomSeedSalt } from "../utils/types";
 
 export class AuditableChat {
     static STORAGE_KEY = 'chats';
@@ -17,7 +16,7 @@ export class AuditableChat {
     //    return auditableReference.auditableMessagesCounter
     //}
 
-    static async #generateAuditableSeed(chatId: string): Promise<string> {
+    static async generateAuditableSeed(chatId: string): Promise<string> {
         const userId = await AuditableChatStateMachine.getUserId();
         if (!userId) throw new Error("No userId found.");
 
@@ -40,61 +39,18 @@ export class AuditableChat {
         return (seed.charAt(0) === '-') ? seed.slice(1) : seed; // Convert to unsigned 32-bit integer
     }
 
+    static async generateBlock(chatId: string, messageToProcess: AuditableMessageContent | AuditableChatMetadata) {
+        const chatState = await AuditableChatStateMachine.getAuditable(chatId);
+        if (!chatState?.auditableChatReference) throw new Error("Internal state for this chat ended earlier than expected.");
+        const seed = chatState.auditableChatReference?.auditableChatSeed;
 
-    static async generateInitBlock(chatId: string): Promise<AuditableBlock> {
-        const initCounter = 0;
-        const seed = await AuditableChat.#generateAuditableSeed(chatId);
-        const initMetadata = new Date().toISOString().split('T')[0];
-        console.log("Timestamp is: ", initMetadata);
-        const previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
-
-        const commitedKey = await AuditableChat.prf({
-            seed,
-            counter: initCounter
-        });
-        const commitedMessage = await AuditableChat.#commitFunction({
-            commitedKey,
-            message: initMetadata
-        });
-        const initHash = await AuditableChat.#hashFunction({
-            previousHash,
-            counter: initCounter,
-            commitedMessage
-        });
-
-        const initBlock: AuditableBlock = {
-            previousHash,
-            counter: initCounter,
-            hash: initHash,
-            commitedMessage
-        }
-        return initBlock;
-    };
-
-    static async #getPreviousMessage(tabId: number, chatId: string) {
-        const lastMessage = (await getChatMessages(tabId, chatId, { count: 1 }))[0];
-        if (!lastMessage) throw new Error("No message available");
-        return lastMessage;
-    }
-
-    static async generateNewBlock(tabId: number, chatId: string, messageToProcess: AuditableMessageContent) {
-        const lastMessage = await AuditableChat.#getPreviousMessage(tabId, chatId);
-        let lastBlock = lastMessage.hash;
-        if (!lastBlock && lastMessage.content === AuditableChatOptions.ACCEPT) {
-            const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
-            if (!auditableState?.auditableChatReference) throw new Error(`New auditable chat has no reference to chat.`);
-            lastBlock = auditableState.auditableChatReference.initialBlock;
-        }
-        if (!lastBlock) throw new Error(`No initial block found in new auditable chat.`);
-
-        const seed = await AuditableChatStateMachine.retrieveSeed(chatId);
-
-        const { counter, hash } = lastBlock;
-        const updatedCounter = counter + 1;
+        const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+        if (!auditableState?.auditableChatReference) throw new Error(`New auditable chat has no reference to chat.`);
+        const { previousHash, counter } = auditableState.auditableChatReference;
 
         const commitedKey = await AuditableChat.prf({
             seed,
-            counter: updatedCounter
+            counter
         });
         console.log("commited args: ", {
             commitedKey,
@@ -106,14 +62,14 @@ export class AuditableChat {
         });
 
         const newHash = await AuditableChat.#hashFunction({
-            previousHash: hash,
-            counter: updatedCounter,
+            previousHash,
+            counter,
             commitedMessage
         });
         return {
             hash: newHash,
-            previousHash: hash,
-            counter: updatedCounter,
+            previousHash,
+            counter,
             commitedMessage
         } as AuditableBlock;
     }

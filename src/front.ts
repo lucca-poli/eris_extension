@@ -1,5 +1,6 @@
+import { AuditableChat } from "./back_utils/auditable_chat";
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
+import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, AuditableStartMetadata, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -42,7 +43,12 @@ class DomProcessor {
             endAuditableButton.innerText = "🔲";
 
             endAuditableButton.addEventListener("click", async () => {
-                await chrome.runtime.sendMessage({
+                const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+                if (!auditableState) throw new Error("There should be a conversation created.");
+                if (!auditableState.auditableChatReference) throw new Error("There should be a auditable chat reference.");
+                console.log("auditableState before finishing: ", auditableState);
+
+                const returnedMessageId: string = await chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
                         content: AuditableChatOptions.END,
@@ -51,16 +57,13 @@ class DomProcessor {
                     } as AuditableMessage
                 } as InternalMessage);
 
-                const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
-                if (!auditableState) throw new Error("There should be a conversation created.");
-                if (!auditableState.auditableChatReference) throw new Error("There should be a auditable chat reference.");
-
                 const getMessages: GetMessages = {
                     chatId,
                     options: {
-                        count: auditableState.auditableChatReference.auditableMessagesCounter,
-                        direction: "after",
-                        id: auditableState.auditableChatReference.currentAuditableChatInitId
+                        // Add one to include initial block
+                        count: auditableState.auditableChatReference.counter,
+                        direction: "before",
+                        id: returnedMessageId
                     }
                 }
                 const auditableMessages: AuditableMessage[] = await chrome.runtime.sendMessage({
@@ -70,12 +73,15 @@ class DomProcessor {
 
                 const publicLogs = auditableMessages.map((message) => message.hash as AuditableBlock);
                 const publicJson = JSON.stringify({
-                    initialBlock: auditableState.auditableChatReference.initialBlock,
                     logMessages: publicLogs
                 });
 
-                const seed = await AuditableChatStateMachine.retrieveSeed(chatId);
-                const counters = [0].concat(publicLogs.map((hashblock) => hashblock.counter))
+                console.log("Public Logs: ", publicLogs);
+                const seed = auditableState.auditableChatReference?.auditableChatSeed;
+                const counters = publicLogs.map((hashblock) => hashblock.counter);
+                // TODO -> retirar esse assignment porque o objecto com todos os campos flattened já vai funcionar (block, seed? e signatures[] no futuro)
+                counters[0] = 0;
+                console.log("counters: ", counters);
                 const commitedKeys: string[] = await chrome.runtime.sendMessage({
                     action: ActionOptions.GET_COMMITED_KEYS,
                     payload: { counters, seed } as GetCommitedKeys
@@ -83,8 +89,7 @@ class DomProcessor {
                 console.log("commited keys: ", commitedKeys)
 
                 const privateLogs = auditableMessages.map((message, index) => {
-                    // Skiping first commitedKey from initialBlock
-                    const commitedKey = commitedKeys[index + 1]
+                    const commitedKey = commitedKeys[index]
                     if (!commitedKey) {
                         console.error(message);
                         throw new Error("No counter for HashBlock.");
@@ -93,7 +98,7 @@ class DomProcessor {
                         content: message.content as string,
                         author: message.author,
                         commitedKey,
-                        counter: counters[index + 1]
+                        counter: counters[index]
                     };
                 });
                 const privateJson = JSON.stringify({
@@ -153,16 +158,19 @@ class DomProcessor {
             denyAuditableButton.innerText = "❌";
 
             acceptAuditableButton.addEventListener("click", async () => {
-                // Por enquanto vou botar no bloco de inicio, sei que não é o ideal
+                this.setupChatbox(chatId);
+
+                const seed = await AuditableChat.generateAuditableSeed(chatId)
+                await AuditableChatStateMachine.setAuditableStart(chatId, seed);
                 chrome.runtime.sendMessage({
-                    action: ActionOptions.SEND_TEXT_MESSAGE,
+                    action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
                         chatId,
                         content: AuditableChatOptions.ACCEPT,
-                        author: await AuditableChatStateMachine.getUserId()
+                        author: await AuditableChatStateMachine.getUserId(),
+                        seed,
                     } as AuditableMessage
                 } as InternalMessage);
-                this.setupChatbox(chatId);
             });
 
             denyAuditableButton.addEventListener("click", async () => {
@@ -329,7 +337,7 @@ window.addEventListener("message", async (event: MessageEvent) => {
     if (!incomingChatMessage.hash) return;
     chrome.runtime.sendMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,
-        payload: incomingChatMessage as AuditableMessage,
+        payload: incomingChatMessage as AuditableMessage | AuditableStartMetadata,
     } as InternalMessage);
 });
 
