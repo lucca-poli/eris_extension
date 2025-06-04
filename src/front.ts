@@ -73,9 +73,7 @@ class DomProcessor {
                 console.log("Auditable Messages: ", auditableMessages);
 
                 const publicLogs = auditableMessages.map((message) => message.metadata?.block as AuditableBlock);
-                const publicJson = JSON.stringify({
-                    logMessages: publicLogs
-                });
+                const publicJson = JSON.stringify(publicLogs);
 
                 console.log("Public Logs: ", publicLogs);
                 const seed = auditableState.auditableChatReference?.auditableChatSeed;
@@ -102,7 +100,7 @@ class DomProcessor {
                 });
                 const privateJson = JSON.stringify({
                     initialCommitedKey: commitedKeys[0],
-                    logMessages: privateLogs
+                    logMessages: privateLogs.slice(1)
                 });
 
                 const dateToday = new Date().toISOString().split('T')[0];
@@ -159,8 +157,6 @@ class DomProcessor {
             acceptAuditableButton.addEventListener("click", async () => {
                 this.setupChatbox(chatId);
 
-                const seed = await AuditableChat.generateAuditableSeed(chatId)
-                await AuditableChatStateMachine.setAuditableStart(chatId, seed);
                 chrome.runtime.sendMessage({
                     action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
@@ -169,7 +165,7 @@ class DomProcessor {
                             content: AuditableChatOptions.ACCEPT,
                             author: await AuditableChatStateMachine.getUserId(),
                         },
-                        toGenerateSeed: true,
+                        startingMessage: true,
                     } as GenerateAuditableMessage,
                 } as InternalMessage);
             });
@@ -276,7 +272,7 @@ class DomProcessor {
                             chatId,
                             author: await AuditableChatStateMachine.getUserId()
                         },
-                        toGenerateSeed: false,
+                        startingMessage: false,
                     } as GenerateAuditableMessage,
                 } as InternalMessage);
 

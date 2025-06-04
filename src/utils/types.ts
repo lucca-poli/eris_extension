@@ -74,7 +74,7 @@ export type AuditableMessageContent = {
 
 export type GenerateAuditableMessage = {
     currentMessage: AuditableMessage;
-    toGenerateSeed: boolean;
+    startingMessage: boolean;
 }
 
 export type AuditableChatMetadata = {

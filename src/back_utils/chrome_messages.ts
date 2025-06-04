@@ -19,13 +19,16 @@ export function setupChromeListeners(tabManager: TabManager) {
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.GENERATE_AND_SEND_BLOCK) return;
 
-        const { currentMessage, toGenerateSeed } = internalMessage.payload as GenerateAuditableMessage;
+        const { currentMessage, startingMessage } = internalMessage.payload as GenerateAuditableMessage;
         const chatId = currentMessage.chatId;
         const tabId = tabManager.getWhatsappTab().id as number;
 
         (async () => {
-            if (toGenerateSeed) {
-                const seed = await AuditableChat.generateAuditableSeed(chatId);
+            if (startingMessage) {
+                const seed = await AuditableChat.generateAuditableSeed(chatId)
+                console.log("Seed created: ", seed)
+                await AuditableChatStateMachine.setAuditableStart(chatId, seed);
+
                 const auditableMetadata: AuditableChatMetadata = {
                     timestamp: new Date().toISOString().split('T')[0]
                 }

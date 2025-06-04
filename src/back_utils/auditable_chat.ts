@@ -48,24 +48,28 @@ export class AuditableChat {
         if (!auditableState?.auditableChatReference) throw new Error(`New auditable chat has no reference to chat.`);
         const { previousHash, counter } = auditableState.auditableChatReference;
 
-        const commitedKey = await AuditableChat.prf({
+        const commitedKeyArgs: PRFArgs = {
             seed,
             counter
-        });
-        console.log("commited args: ", {
-            commitedKey,
-            message: JSON.stringify(messageToProcess)
-        } as CommitArgs)
-        const commitedMessage = await AuditableChat.#commitFunction({
-            commitedKey,
-            message: JSON.stringify(messageToProcess)
-        });
+        };
+        console.log("commitedKeyArgs: ", commitedKeyArgs);
+        const commitedKey = await AuditableChat.prf(commitedKeyArgs);
 
-        const newHash = await AuditableChat.#hashFunction({
+        const commitedMessageArgs: CommitArgs = {
+            commitedKey,
+            message: JSON.stringify(messageToProcess)
+        };
+        console.log("commitedMessageArgs: ", commitedMessageArgs);
+        const commitedMessage = await AuditableChat.#commitFunction(commitedMessageArgs);
+
+        const hashArgs: HashArgs = {
             previousHash,
             counter,
             commitedMessage
-        });
+        };
+        console.log("hashArgs: ", hashArgs);
+        const newHash = await AuditableChat.#hashFunction(hashArgs);
+
         return {
             hash: newHash,
             previousHash,

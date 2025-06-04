@@ -30,6 +30,7 @@ export class AuditableChatStateMachine {
             case AuditableChatStates.REQUEST_SENT:
                 if (incomingMessage.content === AuditableChatOptions.ACCEPT) {
                     const seed = incomingMetadata?.seed;
+                    console.log("Seed arrived: ", seed)
                     if (!seed) {
                         console.error("Acceptation message: ", incomingMessage);
                         throw new Error("Seed not sent in acceptation message.");
