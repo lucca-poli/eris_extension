@@ -39,16 +39,14 @@ export class AuditableChat {
         return (seed.charAt(0) === '-') ? seed.slice(1) : seed; // Convert to unsigned 32-bit integer
     }
 
-    static async generateBlock(chatId: string, messageToProcess: AuditableMessageContent | AuditableChatMetadata, previousBlockState: BlockState) {
+    static async generateCommitedMessage(chatId: string, messageToProcess: AuditableMessageContent | AuditableChatMetadata, counter: number) {
         const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
         if (!auditableState?.auditableChatReference) throw new Error("Internal state for this chat ended earlier than expected.");
         const seed = auditableState.auditableChatReference?.auditableChatSeed;
-        const { hash, counter } = previousBlockState;
-        const updatedCounter = counter + 1;
 
         const commitedKeyArgs: PRFArgs = {
             seed,
-            counter: updatedCounter
+            counter
         };
         console.log("commitedKeyArgs: ", commitedKeyArgs);
         const commitedKey = await AuditableChat.prf(commitedKeyArgs);
@@ -59,6 +57,13 @@ export class AuditableChat {
         };
         console.log("commitedMessageArgs: ", commitedMessageArgs);
         const commitedMessage = await AuditableChat.#commitFunction(commitedMessageArgs);
+
+        return commitedMessage
+    }
+
+    static async generateBlock(commitedMessage: string, previousBlockState: BlockState) {
+        const { hash, counter } = previousBlockState;
+        const updatedCounter = counter + 1;
 
         const hashArgs: HashArgs = {
             previousHash: hash,

@@ -1,21 +1,62 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableChatMetadata, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, BlockState, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
+import { AckMetadata, ActionOptions, AuditableChatMetadata, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, BlockState, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
 import { AuditableChat } from "./auditable_chat";
 import { getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
 
 export function setupChromeListeners(tabManager: TabManager) {
 
+    // Receive message routine
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
         const auditableMessage = internalMessage.payload as AuditableMessage;
+        const { chatId } = auditableMessage;
+        const auditableBlock = auditableMessage.metadata?.block;
+        if (!auditableBlock) throw new Error("Incoming auditable message has no block.");
         console.log("IncomingMessage: ", auditableMessage);
 
-        //(async () => {
-        //})();
+        (async () => {
+            const userId = await AuditableChatStateMachine.getUserId();
+            if (auditableMessage.author === userId) return;
+
+            // Verifying incomingMessage content
+            const auditableState = (
+                await AuditableChatStateMachine.getAuditable(chatId)
+            )?.auditableChatReference;
+            if (!auditableState) throw new Error("Auditable chat has no state.");
+            const { previousHash, counter } = auditableState;
+
+            // Verifying counter - Todos os erros a seguir deveriam encerrar a conversa auditavel
+            if (auditableBlock.counter < counter) throw new Error("Invalid message counter, ending current auditable chat!");
+            if (auditableBlock.counter > counter) console.log("Error? Maybe we should wait for another message.");
+
+            const generatedBlock = await AuditableChat.generateBlock(auditableBlock.commitedMessage, {
+                counter: auditableBlock.counter,
+                hash: auditableBlock.previousHash
+            });
+            if (generatedBlock.hash !== auditableBlock.hash) throw new Error("Hash created from block items is diferent from incoming hash.");
+            if (auditableBlock.previousHash !== previousHash) throw new Error("Previous hash from incoming message and internal state differs.");
+
+            const messageToProcess: AuditableMessageContent = {
+                content: auditableMessage.content as string,
+                author: auditableMessage.author
+            };
+            const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, messageToProcess, auditableBlock.counter);
+            if (commitedMessage !== auditableBlock.commitedMessage) throw new Error("Commited message created from block items is diferent from incoming commited message.")
+
+            // Send ACK
+            const ackMetadata: AckMetadata = {
+                counter,
+                blockHash: auditableBlock.hash
+            };
+
+            // Updating internal state
+            await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
+        })();
     });
 
+    // Send message routine
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.GENERATE_AND_SEND_BLOCK) return;
 
@@ -25,6 +66,7 @@ export function setupChromeListeners(tabManager: TabManager) {
 
         (async () => {
             if (startingMessage) {
+                // User envia mensagem de aceite
                 const seed = await AuditableChat.generateAuditableSeed(chatId)
                 console.log("Seed created: ", seed)
                 const auditableState = await AuditableChatStateMachine.setAuditableStart(chatId, seed);
@@ -38,11 +80,15 @@ export function setupChromeListeners(tabManager: TabManager) {
                     hash: auditableState.auditableChatReference?.previousHash,
                     counter: auditableState.auditableChatReference?.counter - 1
                 }
+
+                const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
+
                 currentMessage.metadata = {
-                    block: await AuditableChat.generateBlock(chatId, auditableMetadata, initChatState),
+                    block: await AuditableChat.generateBlock(commitedMessage, initChatState),
                     seed
                 } as AuditableMessageMetadata;
             } else {
+                // User envia mensagem normal com hashchain
                 const auditableContent: AuditableMessageContent = {
                     content: currentMessage.content as string,
                     author: currentMessage.author
@@ -61,13 +107,18 @@ export function setupChromeListeners(tabManager: TabManager) {
                     counter: lastChatMessageBlock.counter
                 };
 
+                const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
+
                 currentMessage.metadata = {
-                    block: await AuditableChat.generateBlock(chatId, auditableContent, previousBlockState),
+                    block: await AuditableChat.generateBlock(commitedMessage, previousBlockState),
                     seed: undefined
                 } as AuditableMessageMetadata;
             }
 
             await sendTextMessage(tabId, currentMessage);
+
+            const updatedHash = currentMessage.metadata.block.hash;
+            await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
         })();
     });
 

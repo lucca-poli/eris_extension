@@ -334,6 +334,7 @@ window.addEventListener("message", async (event: MessageEvent) => {
 
     // Se a mensagem for de um chat auditavel eu mando pro back processar
     if (!incomingChatMessage.metadata) return;
+
     chrome.runtime.sendMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,
         payload: incomingChatMessage as AuditableMessage,

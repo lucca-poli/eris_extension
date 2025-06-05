@@ -35,11 +35,7 @@ export class AuditableChatStateMachine {
                         console.error("Acceptation message: ", incomingMessage);
                         throw new Error("Seed not sent in acceptation message.");
                     }
-
                     await AuditableChatStateMachine.setAuditableStart(chatId, seed);
-
-                    const updatedHash = incomingMetadata.block.hash;
-                    await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
 
                     auditableChat.currentState = AuditableChatStates.ONGOING;
                 }
@@ -47,14 +43,6 @@ export class AuditableChatStateMachine {
                 break;
             case AuditableChatStates.REQUEST_RECEIVED:
                 if (incomingMessage.content === AuditableChatOptions.ACCEPT) {
-                    // Já é dado o setAuditableStart quando o usuário clica no botão de aceite
-                    if (!incomingMetadata) {
-                        console.error(incomingMessage);
-                        throw new Error("New message doesn't contain metadata field.");
-                    };
-                    const updatedHash = incomingMetadata.block.hash;
-                    await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
-
                     auditableChat.currentState = AuditableChatStates.ONGOING;
                 }
                 if (incomingMessage.content === AuditableChatOptions.DENY) auditableChat.currentState = AuditableChatStates.IDLE
@@ -65,13 +53,6 @@ export class AuditableChatStateMachine {
                     auditableChat.currentState = AuditableChatStates.IDLE;
                     break;
                 }
-
-                if (!incomingMetadata) {
-                    console.error(incomingMessage);
-                    throw new Error("New message doesn't contain metadata field.");
-                };
-                const updatedHash = incomingMetadata.block.hash;
-                await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
                 break;
             default:
                 throw new Error(`Unexpected State in conversation: ${auditableChat.currentState}`)

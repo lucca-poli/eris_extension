@@ -22,6 +22,7 @@ export enum AuditableChatStates {
     REQUEST_SENT = "REQUEST_SENT",
     REQUEST_RECEIVED = "REQUEST_RECEIVED",
     ONGOING = "ONGOING",
+    WAITING_ACK = "WAITING_ACK",
     IDLE = "IDLE"
 };
 
@@ -95,6 +96,11 @@ export type AuditableMessageMetadata = {
 
 export type BlockState = {
     hash: string;
+    counter: number;
+}
+
+export type AckMetadata = {
+    blockHash: string;
     counter: number;
 }
 
