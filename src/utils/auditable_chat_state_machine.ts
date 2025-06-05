@@ -108,7 +108,7 @@ export class AuditableChatStateMachine {
         return chats[chatId];
     }
 
-    static async setAuditableStart(chatId: string, seed: string): Promise<void> {
+    static async setAuditableStart(chatId: string, seed: string): Promise<ChatState> {
         const chat = await this.getAuditable(chatId);
         if (!chat) throw new Error("Trying to set the init Id in an unexistent chat.");
 
@@ -121,6 +121,8 @@ export class AuditableChatStateMachine {
 
         console.log("Auditable Chat is now: ", chat);
         await this.setAuditable(chatId, chat);
+
+        return chat
     }
 
     static async updateAuditableChatState(chatId: string, newHashReference: string): Promise<void> {

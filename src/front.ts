@@ -1,4 +1,3 @@
-import { AuditableChat } from "./back_utils/auditable_chat";
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
 import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
 
@@ -275,7 +274,6 @@ class DomProcessor {
                         startingMessage: false,
                     } as GenerateAuditableMessage,
                 } as InternalMessage);
-
 
                 // @ts-ignore
                 auditableChatbox?.textContent = '';

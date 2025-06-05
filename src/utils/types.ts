@@ -93,6 +93,11 @@ export type AuditableMessageMetadata = {
     seed?: string;
 }
 
+export type BlockState = {
+    hash: string;
+    counter: number;
+}
+
 export type PRFArgs = {
     seed: string;
     counter: number;

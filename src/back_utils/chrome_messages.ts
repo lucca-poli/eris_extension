@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableChatMetadata, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
+import { ActionOptions, AuditableChatMetadata, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, BlockState, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
 import { AuditableChat } from "./auditable_chat";
 import { getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
@@ -27,13 +27,19 @@ export function setupChromeListeners(tabManager: TabManager) {
             if (startingMessage) {
                 const seed = await AuditableChat.generateAuditableSeed(chatId)
                 console.log("Seed created: ", seed)
-                await AuditableChatStateMachine.setAuditableStart(chatId, seed);
+                const auditableState = await AuditableChatStateMachine.setAuditableStart(chatId, seed);
+                if (!auditableState.auditableChatReference) throw new Error("Chat has no state");
 
                 const auditableMetadata: AuditableChatMetadata = {
                     timestamp: new Date().toISOString().split('T')[0]
                 }
+
+                const initChatState: BlockState = {
+                    hash: auditableState.auditableChatReference?.previousHash,
+                    counter: auditableState.auditableChatReference?.counter - 1
+                }
                 currentMessage.metadata = {
-                    block: await AuditableChat.generateBlock(chatId, auditableMetadata),
+                    block: await AuditableChat.generateBlock(chatId, auditableMetadata, initChatState),
                     seed
                 } as AuditableMessageMetadata;
             } else {
@@ -42,8 +48,21 @@ export function setupChromeListeners(tabManager: TabManager) {
                     author: currentMessage.author
                 }
 
+                const lastChatMessageBatch = await getChatMessages(tabId, chatId, {
+                    count: 1
+                });
+                if (lastChatMessageBatch.length !== 1) throw new Error("More messages returned than it should.");
+
+                const lastChatMessageBlock = lastChatMessageBatch[0].metadata?.block;
+                if (!lastChatMessageBlock) throw new Error("There should be a previous block.");
+
+                const previousBlockState: BlockState = {
+                    hash: lastChatMessageBlock.hash,
+                    counter: lastChatMessageBlock.counter
+                };
+
                 currentMessage.metadata = {
-                    block: await AuditableChat.generateBlock(chatId, auditableContent),
+                    block: await AuditableChat.generateBlock(chatId, auditableContent, previousBlockState),
                     seed: undefined
                 } as AuditableMessageMetadata;
             }
