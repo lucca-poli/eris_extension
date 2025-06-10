@@ -15,7 +15,8 @@ export enum AuditableChatOptions {
     REQUEST = "Requesting auditable conversation.",
     ACCEPT = "Auditable conversation accepted.",
     DENY = "Auditable conversation denied.",
-    END = "Auditable conversation ended. Logs available in popup."
+    END = "Auditable conversation ended. Logs available in popup.",
+    ACK = "Confirmation ACK sent."
 };
 
 export enum AuditableChatStates {

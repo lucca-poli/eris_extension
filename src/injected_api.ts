@@ -23,6 +23,8 @@ WhatsappLayer.on('chat.new_message', async (chatMessage) => {
     if (!arrivedMessage.chatId) throw new Error(`New message has no message: ${arrivedMessage}`);
     if (!arrivedMessage.author) throw new Error(`New message has no author: ${arrivedMessage}`);
 
+    // Identify ACK and send metadata for back to process
+
     window.postMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,
         payload: arrivedMessage,

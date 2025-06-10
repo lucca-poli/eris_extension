@@ -4,6 +4,8 @@ import { AuditableChat } from "./auditable_chat";
 import { getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
 
+// Fazer que função que processa ACK e função que processa mensagem auditavel e botar pra rodar uma ou outra dependendo do conteudo da mensagem auditavel
+
 export function setupChromeListeners(tabManager: TabManager) {
 
     // Receive message routine
