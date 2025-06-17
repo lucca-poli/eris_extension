@@ -1,29 +1,50 @@
 import "@wppconnect/wa-js"
 import WPP from "@wppconnect/wa-js"
-import { ActionOptions, InternalMessage, AuditableMessage, AuditableMessageMetadata } from "./utils/types";
+import { ActionOptions, InternalMessage, AuditableMessage, AuditableMessageMetadataSchema, AckMetadataSchema, AckMetadata, AuditableChatOptions, AuditableMessageMetadata } from "./utils/types";
 
 // @ts-ignore
 const WhatsappLayer: typeof WPP = window.WPP;
 
 WhatsappLayer.on('chat.new_message', async (chatMessage) => {
-    const auditableBlockString = chatMessage.description as string | undefined;
+    const incomingMetadataString = chatMessage.description as string | undefined;
+    const incomingMetadataObject = (typeof (incomingMetadataString) === "string")
+        ? JSON.parse(incomingMetadataString) as AuditableMessageMetadata | AckMetadata
+        : undefined;
+    let arrivedMessage: AuditableMessage | AckMetadata;
 
-    const metadata: AuditableMessageMetadata = auditableBlockString ? JSON.parse(auditableBlockString) : undefined;
+    const auditableMetadata = AuditableMessageMetadataSchema.safeParse(incomingMetadataObject);
+    const ackMetadata = AckMetadataSchema.safeParse(incomingMetadataObject);
 
-    const arrivedMessage: AuditableMessage = {
-        content: chatMessage.body,
-        chatId: chatMessage.id?.remote?._serialized as string,
-        author: chatMessage.from?._serialized as string,
-        metadata,
-        messageId: chatMessage.id._serialized,
-        timestamp: chatMessage.t,
-    };
+    // Deletar o ACK na minha visão se fui eu que enviei
+    if (ackMetadata.success && !chatMessage?.from?.isUser()) {
+        const lastChatMessageBatch = await getChatMessages(tabId, chatId, {
+            count: 1
+        });
+        const lastChatMessageBatch = await WhatsappLayer.chat.getMessages(tabId, chatId, {
+            count: 1
+        });
+        if (lastChatMessageBatch.length !== 1) throw new Error("More messages returned than it should.");
 
-    if (!chatMessage?.from?.isUser()) return;
-    if (!arrivedMessage.chatId) throw new Error(`New message has no message: ${arrivedMessage}`);
-    if (!arrivedMessage.author) throw new Error(`New message has no author: ${arrivedMessage}`);
+        return;
+    }
 
-    // Identify ACK and send metadata for back to process
+    if (ackMetadata.success) {
+        if (chatMessage.body !== AuditableChatOptions.ACK) throw new Error("Ack message differs from expected message.");
+        arrivedMessage = ackMetadata.data;
+    } else {
+        arrivedMessage = {
+            content: chatMessage.body,
+            chatId: chatMessage.id?.remote?._serialized as string,
+            author: chatMessage.from?._serialized as string,
+            metadata: auditableMetadata.data,
+            messageId: chatMessage.id._serialized,
+            timestamp: chatMessage.t,
+        };
+
+        if (!chatMessage?.from?.isUser()) return;
+        if (!arrivedMessage.chatId) throw new Error(`New message has no message: ${arrivedMessage}`);
+        if (!arrivedMessage.author) throw new Error(`New message has no author: ${arrivedMessage}`);
+    }
 
     window.postMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,

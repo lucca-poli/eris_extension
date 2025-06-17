@@ -58,6 +58,48 @@ export function setupChromeListeners(tabManager: TabManager) {
         })();
     });
 
+    // Receive ACK routine
+    chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
+        if (internalMessage.action !== ActionOptions.PROPAGATE_ACK) return;
+
+        const ackMetadata = internalMessage.payload as AckMetadata;
+        console.log("IncomingAck: ", ackMetadata);
+
+        (async () => {
+            const userId = await AuditableChatStateMachine.getUserId();
+            if (ackMetadata.author === userId) return;
+            const chatId = ackMetadata.author;
+
+            // Verifying incomingMessage content
+            const auditableState = (
+                await AuditableChatStateMachine.getAuditable(chatId)
+            )?.auditableChatReference;
+            if (!auditableState) throw new Error("Auditable chat has no state.");
+            const { previousHash, counter } = auditableState;
+
+            // Verifying counter - Todos os erros a seguir deveriam encerrar a conversa auditavel
+            if (auditableBlock.counter < counter) throw new Error("Invalid message counter, ending current auditable chat!");
+            if (auditableBlock.counter > counter) console.log("Error? Maybe we should wait for another message.");
+
+            const generatedBlock = await AuditableChat.generateBlock(auditableBlock.commitedMessage, {
+                counter: auditableBlock.counter,
+                hash: auditableBlock.previousHash
+            });
+            if (generatedBlock.hash !== auditableBlock.hash) throw new Error("Hash created from block items is diferent from incoming hash.");
+            if (auditableBlock.previousHash !== previousHash) throw new Error("Previous hash from incoming message and internal state differs.");
+
+            const messageToProcess: AuditableMessageContent = {
+                content: auditableMessage.content as string,
+                author: auditableMessage.author
+            };
+            const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, messageToProcess, auditableBlock.counter);
+            if (commitedMessage !== auditableBlock.commitedMessage) throw new Error("Commited message created from block items is diferent from incoming commited message.")
+
+            // Updating internal state
+            await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
+        })();
+    });
+
     // Send message routine
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.GENERATE_AND_SEND_BLOCK) return;

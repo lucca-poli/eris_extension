@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
+import { AckMetadata, AckMetadataSchema, ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -312,33 +312,47 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const internalMessage: InternalMessage = event.data;
     if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
-    const incomingChatMessage = internalMessage.payload as AuditableMessage;
-    const { chatId } = incomingChatMessage;
+    const incomingChatMessage = internalMessage.payload as AuditableMessage | AckMetadata;
+    const ackMetada = AckMetadataSchema.safeParse(incomingChatMessage);
+    if (ackMetada.success) {
+        chrome.runtime.sendMessage({
+            action: ActionOptions.PROPAGATE_ACK,
+            payload: ackMetada.data,
+        } as InternalMessage);
 
-    console.log("Old chatState: ", await AuditableChatStateMachine.getAuditable(chatId))
-    console.log("Active chat before processing: ", currentAuditableChatId);
+        // Manage AuditableChats state
+        const newState = await AuditableChatStateMachine.updateState(ackMetada.data.author, ackMetada.data);
+        if (newState) currentAuditableChatId = chatId;
 
-    // Manage AuditableChats state
-    const newState = await AuditableChatStateMachine.updateState(chatId, incomingChatMessage);
-    if (newState) currentAuditableChatId = chatId;
-    console.log("New chatState: ", await AuditableChatStateMachine.getAuditable(chatId))
+        // Update DOM
+        if (currentAuditableChatId && currentAuditableChatId === chatId) {
+            const currentAuditableChat = await AuditableChatStateMachine.getAuditable(currentAuditableChatId);
+            if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
+            domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
+        }
+    } else {
+        const auditableMessage = incomingChatMessage as AuditableMessage;
+        const { chatId } = auditableMessage;
 
-    console.log("Active chat after processing: ", currentAuditableChatId);
+        // Manage AuditableChats state
+        const newState = await AuditableChatStateMachine.updateState(chatId, auditableMessage, auditableMessage.metadata?.seed);
+        if (newState) currentAuditableChatId = chatId;
 
-    // Update DOM
-    if (currentAuditableChatId && currentAuditableChatId === chatId) {
-        const currentAuditableChat = await AuditableChatStateMachine.getAuditable(currentAuditableChatId);
-        if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
-        domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
+        // Update DOM
+        if (currentAuditableChatId && currentAuditableChatId === chatId) {
+            const currentAuditableChat = await AuditableChatStateMachine.getAuditable(currentAuditableChatId);
+            if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
+            domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
+        }
+
+        // Se a mensagem for de um chat auditavel eu mando pro back processar
+        if (!auditableMessage.metadata) return;
+
+        chrome.runtime.sendMessage({
+            action: ActionOptions.PROPAGATE_NEW_MESSAGE,
+            payload: incomingChatMessage as AuditableMessage,
+        } as InternalMessage);
     }
-
-    // Se a mensagem for de um chat auditavel eu mando pro back processar
-    if (!incomingChatMessage.metadata) return;
-
-    chrome.runtime.sendMessage({
-        action: ActionOptions.PROPAGATE_NEW_MESSAGE,
-        payload: incomingChatMessage as AuditableMessage,
-    } as InternalMessage);
 });
 
 window.addEventListener("message", async (event: MessageEvent) => {

@@ -1,4 +1,4 @@
-import { AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
+import { AckMetadata, AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
 
 export class AuditableChatStateMachine {
     private chatId: string;
@@ -11,7 +11,7 @@ export class AuditableChatStateMachine {
         this.currentState = currentState || AuditableChatStates.IDLE;
     };
 
-    static async updateState(chatId: string, incomingMessage: AuditableMessage): Promise<ChatState | undefined> {
+    static async updateState(chatId: string, incomingMessage: AuditableMessage | AckMetadata, seed?: string): Promise<ChatState | undefined> {
         const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
         const auditableChat = new AuditableChatStateMachine(chatId, auditableState?.currentState);
         const incomingMetadata = incomingMessage.metadata;
@@ -53,6 +53,8 @@ export class AuditableChatStateMachine {
                     auditableChat.currentState = AuditableChatStates.IDLE;
                     break;
                 }
+                break;
+            case AuditableChatStates.WAITING_ACK:
                 break;
             default:
                 throw new Error(`Unexpected State in conversation: ${auditableChat.currentState}`)

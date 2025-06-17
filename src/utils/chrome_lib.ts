@@ -1,4 +1,4 @@
-import { AuditableMessage, AuditableMessageMetadata, GetMessagesOptions } from "./types";
+import { AckMetadata, AuditableMessage, AuditableMessageMetadata, GetMessagesOptions } from "./types";
 import WPP from "@wppconnect/wa-js"
 
 export function setInputbox(tabId: number, message: string) {
@@ -27,9 +27,11 @@ export async function getUserId(tabId: number) {
     return result?._serialized;
 }
 
-export async function sendTextMessage(tabId: number, chatMessage: AuditableMessage) {
+export async function sendTextMessage(tabId: number, chatMessage: AuditableMessage | AckMetadata) {
     const { chatId, content, metadata } = chatMessage;
+
     const metadataString = metadata ? JSON.stringify(metadata) : "";
+
     const [{ result }] = await chrome.scripting.executeScript({
         func: (chatId: string, content: string, metadata?: string) => {
             // @ts-ignore

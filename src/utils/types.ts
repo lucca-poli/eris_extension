@@ -1,6 +1,9 @@
+import { z } from "zod/v4"
+
 export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
+    PROPAGATE_ACK = "PROPAGATE_ACK",
     GENERATE_AND_SEND_BLOCK = "GENERATE_AND_SEND_BLOCK",
     GET_MESSAGES = "GET_MESSAGES",
     GET_COMMITED_KEYS = "GET_COMMITED_KEYS",
@@ -95,13 +98,36 @@ export type AuditableMessageMetadata = {
     seed?: string;
 }
 
-export type BlockState = {
-    hash: string;
-    counter: number;
-}
+export const AuditableBlockSchema = z.object({
+    hash: z.string(),
+    previousHash: z.string(),
+    counter: z.number(),
+    commitedMessage: z.string()
+});
+
+export const AuditableMessageMetadataSchema = z.object({
+    block: AuditableBlockSchema,
+    seed: z.string().optional()
+});
 
 export type AckMetadata = {
     blockHash: string;
+    counter: number;
+    author: string;
+    content: AuditableChatOptions;
+}
+
+export const AuditableChatOptionsSchema = z.enum(AuditableChatOptions);
+
+export const AckMetadataSchema = z.object({
+    blockHash: z.string(),
+    counter: z.number(),
+    author: z.string(),
+    content: AuditableChatOptionsSchema
+});
+
+export type BlockState = {
+    hash: string;
     counter: number;
 }
 
