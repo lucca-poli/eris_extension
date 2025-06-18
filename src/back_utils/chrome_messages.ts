@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { AckMetadata, ActionOptions, AuditableChatMetadata, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, BlockState, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
+import { AckMetadata, ActionOptions, AuditableChatMetadata, AuditableChatOptions, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, BlockState, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
 import { AuditableChat } from "./auditable_chat";
 import { getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
@@ -12,14 +12,17 @@ export function setupChromeListeners(tabManager: TabManager) {
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
-        const auditableMessage = internalMessage.payload as AuditableMessage;
+        const { auditableMessage, startingMessage } = internalMessage.payload as GenerateAuditableMessage;
         const { chatId } = auditableMessage;
+        const tabId = tabManager.getWhatsappTab().id as number;
         const auditableBlock = auditableMessage.metadata?.block;
         if (!auditableBlock) throw new Error("Incoming auditable message has no block.");
+        const previousCounter = auditableBlock.counter - 1;
         console.log("IncomingMessage: ", auditableMessage);
 
         (async () => {
             const userId = await AuditableChatStateMachine.getUserId();
+            if (!userId) throw new Error("No user id found.");
             if (auditableMessage.author === userId) return;
 
             // Verifying incomingMessage content
@@ -33,67 +36,38 @@ export function setupChromeListeners(tabManager: TabManager) {
             if (auditableBlock.counter < counter) throw new Error("Invalid message counter, ending current auditable chat!");
             if (auditableBlock.counter > counter) console.log("Error? Maybe we should wait for another message.");
 
+            // Verifying hashes
             const generatedBlock = await AuditableChat.generateBlock(auditableBlock.commitedMessage, {
-                counter: auditableBlock.counter,
+                counter: previousCounter,
                 hash: auditableBlock.previousHash
             });
+            console.log("generated block: ", generatedBlock);
+            console.log("auditable state: ", auditableState)
             if (generatedBlock.hash !== auditableBlock.hash) throw new Error("Hash created from block items is diferent from incoming hash.");
             if (auditableBlock.previousHash !== previousHash) throw new Error("Previous hash from incoming message and internal state differs.");
 
-            const messageToProcess: AuditableMessageContent = {
-                content: auditableMessage.content as string,
-                author: auditableMessage.author
-            };
-            const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, messageToProcess, auditableBlock.counter);
+            // Verifying commitedMessage
+            const messageToProcess: AuditableMessageContent | AuditableChatMetadata = startingMessage ?
+                {
+                    timestamp: new Date().toISOString().split('T')[0]
+                } :
+                {
+                    content: auditableMessage.content as string,
+                    author: auditableMessage.author
+                };
+            const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, messageToProcess, previousCounter);
             if (commitedMessage !== auditableBlock.commitedMessage) throw new Error("Commited message created from block items is diferent from incoming commited message.")
 
             // Send ACK
+            console.log("Should send message now")
             const ackMetadata: AckMetadata = {
                 counter,
-                blockHash: auditableBlock.hash
+                blockHash: auditableBlock.hash,
+                sender: userId,
+                receiver: chatId,
+                content: AuditableChatOptions.ACK
             };
-
-            // Updating internal state
-            await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
-        })();
-    });
-
-    // Receive ACK routine
-    chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
-        if (internalMessage.action !== ActionOptions.PROPAGATE_ACK) return;
-
-        const ackMetadata = internalMessage.payload as AckMetadata;
-        console.log("IncomingAck: ", ackMetadata);
-
-        (async () => {
-            const userId = await AuditableChatStateMachine.getUserId();
-            if (ackMetadata.author === userId) return;
-            const chatId = ackMetadata.author;
-
-            // Verifying incomingMessage content
-            const auditableState = (
-                await AuditableChatStateMachine.getAuditable(chatId)
-            )?.auditableChatReference;
-            if (!auditableState) throw new Error("Auditable chat has no state.");
-            const { previousHash, counter } = auditableState;
-
-            // Verifying counter - Todos os erros a seguir deveriam encerrar a conversa auditavel
-            if (auditableBlock.counter < counter) throw new Error("Invalid message counter, ending current auditable chat!");
-            if (auditableBlock.counter > counter) console.log("Error? Maybe we should wait for another message.");
-
-            const generatedBlock = await AuditableChat.generateBlock(auditableBlock.commitedMessage, {
-                counter: auditableBlock.counter,
-                hash: auditableBlock.previousHash
-            });
-            if (generatedBlock.hash !== auditableBlock.hash) throw new Error("Hash created from block items is diferent from incoming hash.");
-            if (auditableBlock.previousHash !== previousHash) throw new Error("Previous hash from incoming message and internal state differs.");
-
-            const messageToProcess: AuditableMessageContent = {
-                content: auditableMessage.content as string,
-                author: auditableMessage.author
-            };
-            const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, messageToProcess, auditableBlock.counter);
-            if (commitedMessage !== auditableBlock.commitedMessage) throw new Error("Commited message created from block items is diferent from incoming commited message.")
+            await sendTextMessage(tabId, ackMetadata);
 
             // Updating internal state
             await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
@@ -104,8 +78,8 @@ export function setupChromeListeners(tabManager: TabManager) {
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.GENERATE_AND_SEND_BLOCK) return;
 
-        const { currentMessage, startingMessage } = internalMessage.payload as GenerateAuditableMessage;
-        const chatId = currentMessage.chatId;
+        const { auditableMessage, startingMessage } = internalMessage.payload as GenerateAuditableMessage;
+        const chatId = auditableMessage.chatId;
         const tabId = tabManager.getWhatsappTab().id as number;
 
         (async () => {
@@ -127,15 +101,15 @@ export function setupChromeListeners(tabManager: TabManager) {
 
                 const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
 
-                currentMessage.metadata = {
+                auditableMessage.metadata = {
                     block: await AuditableChat.generateBlock(commitedMessage, initChatState),
                     seed
                 } as AuditableMessageMetadata;
             } else {
                 // User envia mensagem normal com hashchain
                 const auditableContent: AuditableMessageContent = {
-                    content: currentMessage.content as string,
-                    author: currentMessage.author
+                    content: auditableMessage.content as string,
+                    author: auditableMessage.author
                 }
 
                 const lastChatMessageBatch = await getChatMessages(tabId, chatId, {
@@ -153,15 +127,15 @@ export function setupChromeListeners(tabManager: TabManager) {
 
                 const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
 
-                currentMessage.metadata = {
+                auditableMessage.metadata = {
                     block: await AuditableChat.generateBlock(commitedMessage, previousBlockState),
                     seed: undefined
                 } as AuditableMessageMetadata;
             }
 
-            await sendTextMessage(tabId, currentMessage);
+            await sendTextMessage(tabId, auditableMessage);
 
-            const updatedHash = currentMessage.metadata.block.hash;
+            const updatedHash = auditableMessage.metadata.block.hash;
             await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
         })();
     });

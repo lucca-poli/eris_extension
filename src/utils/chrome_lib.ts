@@ -1,4 +1,4 @@
-import { AckMetadata, AuditableMessage, AuditableMessageMetadata, GetMessagesOptions } from "./types";
+import { AckMetadata, AckMetadataSchema, AuditableMessage, AuditableMessageMetadata, GetMessagesOptions } from "./types";
 import WPP from "@wppconnect/wa-js"
 
 export function setInputbox(tabId: number, message: string) {
@@ -28,15 +28,27 @@ export async function getUserId(tabId: number) {
 }
 
 export async function sendTextMessage(tabId: number, chatMessage: AuditableMessage | AckMetadata) {
-    const { chatId, content, metadata } = chatMessage;
+    const { content } = chatMessage;
+    const ackMetada = AckMetadataSchema.safeParse(chatMessage);
+    const metadata = ackMetada.success ?
+        chatMessage as AckMetadata :
+        (chatMessage as AuditableMessage).metadata;
+    const chatId = ackMetada.success ? (chatMessage as AckMetadata).receiver : (chatMessage as AuditableMessage).chatId;
 
     const metadataString = metadata ? JSON.stringify(metadata) : "";
+    // console.log("chatId is: ", chatId);
+    // console.log("content is: ", content);
+    // console.log("metadata string is: ", metadataString);
+    if (typeof (content) !== "string") throw new Error("Content is undefined.");
 
     const [{ result }] = await chrome.scripting.executeScript({
         func: (chatId: string, content: string, metadata?: string) => {
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
 
+            // console.log("chatId is: ", chatId);
+            // console.log("content is: ", content);
+            // console.log("metadata string is: ", metadata);
             if (metadata) return WhatsappLayer.chat.sendTextMessage(chatId, content, {
                 // @ts-ignore: talvez de merda depois ignorar esse erro
                 linkPreview: {

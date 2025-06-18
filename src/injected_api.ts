@@ -15,18 +15,8 @@ WhatsappLayer.on('chat.new_message', async (chatMessage) => {
     const auditableMetadata = AuditableMessageMetadataSchema.safeParse(incomingMetadataObject);
     const ackMetadata = AckMetadataSchema.safeParse(incomingMetadataObject);
 
-    // Deletar o ACK na minha visão se fui eu que enviei
-    if (ackMetadata.success && !chatMessage?.from?.isUser()) {
-        const lastChatMessageBatch = await getChatMessages(tabId, chatId, {
-            count: 1
-        });
-        const lastChatMessageBatch = await WhatsappLayer.chat.getMessages(tabId, chatId, {
-            count: 1
-        });
-        if (lastChatMessageBatch.length !== 1) throw new Error("More messages returned than it should.");
-
-        return;
-    }
+    // Ignorar a mensagem se é um ACK na minha visão se fui eu que enviei
+    if (ackMetadata.success && chatMessage.id.fromMe) return;
 
     if (ackMetadata.success) {
         if (chatMessage.body !== AuditableChatOptions.ACK) throw new Error("Ack message differs from expected message.");

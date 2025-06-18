@@ -1,4 +1,4 @@
-import { AckMetadata, AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
+import { AckMetadata, AckMetadataSchema, AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
 
 export class AuditableChatStateMachine {
     private chatId: string;
@@ -11,15 +11,16 @@ export class AuditableChatStateMachine {
         this.currentState = currentState || AuditableChatStates.IDLE;
     };
 
-    static async updateState(chatId: string, incomingMessage: AuditableMessage | AckMetadata, seed?: string): Promise<ChatState | undefined> {
+    static async updateState(chatId: string, incomingMessage: AuditableMessage | AckMetadata, seed?: string) {
         const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
         const auditableChat = new AuditableChatStateMachine(chatId, auditableState?.currentState);
-        const incomingMetadata = incomingMessage.metadata;
+
+        const ackMetadata = AckMetadataSchema.safeParse(incomingMessage);
 
         switch (auditableChat.getCurrentState()) {
             case AuditableChatStates.IDLE:
                 if (incomingMessage.content === AuditableChatOptions.REQUEST) {
-                    const authorIsMe = (await AuditableChatStateMachine.getUserId()) === incomingMessage.author;
+                    const authorIsMe = (await AuditableChatStateMachine.getUserId()) === (incomingMessage as AuditableMessage).author;
                     if (authorIsMe) {
                         auditableChat.currentState = AuditableChatStates.REQUEST_SENT;
                     } else {
@@ -29,7 +30,6 @@ export class AuditableChatStateMachine {
                 break;
             case AuditableChatStates.REQUEST_SENT:
                 if (incomingMessage.content === AuditableChatOptions.ACCEPT) {
-                    const seed = incomingMetadata?.seed;
                     console.log("Seed arrived: ", seed)
                     if (!seed) {
                         console.error("Acceptation message: ", incomingMessage);
@@ -53,8 +53,20 @@ export class AuditableChatStateMachine {
                     auditableChat.currentState = AuditableChatStates.IDLE;
                     break;
                 }
+
+                if (!ackMetadata.success && (incomingMessage as AuditableMessage).author !== chatId) auditableChat.currentState = AuditableChatStates.WAITING_ACK;
+
                 break;
             case AuditableChatStates.WAITING_ACK:
+                const internalCounter = auditableState?.auditableChatReference?.counter;
+                if (!ackMetadata.success) throw new Error("Message arrived instead of ACK, should start AtD Block.");
+                if (!internalCounter) throw new Error("No internal counter present.");
+                if (ackMetadata.data.counter > internalCounter) throw new Error("Messages arrived out of order.");
+                // If the ack counter is less than the internal counter, should keep at WAITING_ACK state
+
+                // TODO: Include signature verifying in the future
+
+                if (ackMetadata.data.counter === internalCounter) auditableChat.currentState = AuditableChatStates.ONGOING;
                 break;
             default:
                 throw new Error(`Unexpected State in conversation: ${auditableChat.currentState}`)
@@ -67,7 +79,7 @@ export class AuditableChatStateMachine {
             currentState: auditableChat.getCurrentState(),
         };
         await AuditableChatStateMachine.setAuditable(chatId, newChatState);
-        return auditableState;
+        return newChatState;
     }
 
     getCurrentState() {

@@ -159,7 +159,7 @@ class DomProcessor {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
-                        currentMessage: {
+                        auditableMessage: {
                             chatId,
                             content: AuditableChatOptions.ACCEPT,
                             author: await AuditableChatStateMachine.getUserId(),
@@ -266,7 +266,7 @@ class DomProcessor {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
-                        currentMessage: {
+                        auditableMessage: {
                             content: auditableChatbox.textContent,
                             chatId,
                             author: await AuditableChatStateMachine.getUserId()
@@ -315,17 +315,12 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const incomingChatMessage = internalMessage.payload as AuditableMessage | AckMetadata;
     const ackMetada = AckMetadataSchema.safeParse(incomingChatMessage);
     if (ackMetada.success) {
-        chrome.runtime.sendMessage({
-            action: ActionOptions.PROPAGATE_ACK,
-            payload: ackMetada.data,
-        } as InternalMessage);
-
         // Manage AuditableChats state
-        const newState = await AuditableChatStateMachine.updateState(ackMetada.data.author, ackMetada.data);
-        if (newState) currentAuditableChatId = chatId;
+        const newState = await AuditableChatStateMachine.updateState(ackMetada.data.receiver, ackMetada.data);
+        if (newState) currentAuditableChatId = ackMetada.data.receiver;
 
         // Update DOM
-        if (currentAuditableChatId && currentAuditableChatId === chatId) {
+        if (currentAuditableChatId && currentAuditableChatId === ackMetada.data.receiver) {
             const currentAuditableChat = await AuditableChatStateMachine.getAuditable(currentAuditableChatId);
             if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
             domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
@@ -333,9 +328,12 @@ window.addEventListener("message", async (event: MessageEvent) => {
     } else {
         const auditableMessage = incomingChatMessage as AuditableMessage;
         const { chatId } = auditableMessage;
+        const oldState = await AuditableChatStateMachine.getAuditable(chatId);
+        console.log("oldState is: ", oldState);
 
         // Manage AuditableChats state
         const newState = await AuditableChatStateMachine.updateState(chatId, auditableMessage, auditableMessage.metadata?.seed);
+        console.log("newState is: ", newState);
         if (newState) currentAuditableChatId = chatId;
 
         // Update DOM
@@ -348,9 +346,16 @@ window.addEventListener("message", async (event: MessageEvent) => {
         // Se a mensagem for de um chat auditavel eu mando pro back processar
         if (!auditableMessage.metadata) return;
 
+        const oldStateIsRequest = (oldState?.currentState === AuditableChatStates.REQUEST_SENT) || (oldState?.currentState === AuditableChatStates.REQUEST_RECEIVED);
+        console.log("oldStateIsRequest is: ", oldStateIsRequest);
+        const newStateIsAuditable = newState?.currentState === AuditableChatStates.ONGOING;
+        console.log("newStateIsAuditable is: ", newStateIsAuditable);
         chrome.runtime.sendMessage({
             action: ActionOptions.PROPAGATE_NEW_MESSAGE,
-            payload: incomingChatMessage as AuditableMessage,
+            payload: {
+                auditableMessage: incomingChatMessage,
+                startingMessage: (oldStateIsRequest && newStateIsAuditable) ? true : false
+            } as GenerateAuditableMessage,
         } as InternalMessage);
     }
 });
