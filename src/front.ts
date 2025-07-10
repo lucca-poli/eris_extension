@@ -315,12 +315,12 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const incomingChatMessage = internalMessage.payload as AuditableMessage | AckMetadata;
     const ackMetada = AckMetadataSchema.safeParse(incomingChatMessage);
     if (ackMetada.success) {
-        // Manage AuditableChats state
-        const newState = await AuditableChatStateMachine.updateState(ackMetada.data.receiver, ackMetada.data);
-        if (newState) currentAuditableChatId = ackMetada.data.receiver;
+        // Manage AuditableChats state. I get the sender because all acks come from the receiver
+        const newState = await AuditableChatStateMachine.updateState(ackMetada.data.sender, ackMetada.data);
+        if (newState) currentAuditableChatId = ackMetada.data.sender;
 
         // Update DOM
-        if (currentAuditableChatId && currentAuditableChatId === ackMetada.data.receiver) {
+        if (currentAuditableChatId && currentAuditableChatId === ackMetada.data.sender) {
             const currentAuditableChat = await AuditableChatStateMachine.getAuditable(currentAuditableChatId);
             if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
             domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
@@ -335,6 +335,7 @@ window.addEventListener("message", async (event: MessageEvent) => {
         const newState = await AuditableChatStateMachine.updateState(chatId, auditableMessage, auditableMessage.metadata?.seed);
         console.log("newState is: ", newState);
         if (newState) currentAuditableChatId = chatId;
+        console.log("newState really is: ", await AuditableChatStateMachine.getAuditable(chatId));
 
         // Update DOM
         if (currentAuditableChatId && currentAuditableChatId === chatId) {
@@ -347,9 +348,7 @@ window.addEventListener("message", async (event: MessageEvent) => {
         if (!auditableMessage.metadata) return;
 
         const oldStateIsRequest = (oldState?.currentState === AuditableChatStates.REQUEST_SENT) || (oldState?.currentState === AuditableChatStates.REQUEST_RECEIVED);
-        console.log("oldStateIsRequest is: ", oldStateIsRequest);
         const newStateIsAuditable = newState?.currentState === AuditableChatStates.ONGOING;
-        console.log("newStateIsAuditable is: ", newStateIsAuditable);
         chrome.runtime.sendMessage({
             action: ActionOptions.PROPAGATE_NEW_MESSAGE,
             payload: {
@@ -372,7 +371,8 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
     const currentState = auditableState?.currentState || AuditableChatStates.IDLE;
     AuditableChatStateMachine.setAuditable(chatId, {
-        currentState
+        currentState,
+        auditableChatReference: auditableState?.auditableChatReference
     });
     currentAuditableChatId = chatId;
 

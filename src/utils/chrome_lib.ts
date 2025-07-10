@@ -36,9 +36,6 @@ export async function sendTextMessage(tabId: number, chatMessage: AuditableMessa
     const chatId = ackMetada.success ? (chatMessage as AckMetadata).receiver : (chatMessage as AuditableMessage).chatId;
 
     const metadataString = metadata ? JSON.stringify(metadata) : "";
-    // console.log("chatId is: ", chatId);
-    // console.log("content is: ", content);
-    // console.log("metadata string is: ", metadataString);
     if (typeof (content) !== "string") throw new Error("Content is undefined.");
 
     const [{ result }] = await chrome.scripting.executeScript({
@@ -46,9 +43,6 @@ export async function sendTextMessage(tabId: number, chatMessage: AuditableMessa
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
 
-            // console.log("chatId is: ", chatId);
-            // console.log("content is: ", content);
-            // console.log("metadata string is: ", metadata);
             if (metadata) return WhatsappLayer.chat.sendTextMessage(chatId, content, {
                 // @ts-ignore: talvez de merda depois ignorar esse erro
                 linkPreview: {
@@ -58,6 +52,21 @@ export async function sendTextMessage(tabId: number, chatMessage: AuditableMessa
             return WhatsappLayer.chat.sendTextMessage(chatId, content);
         },
         args: [chatId, content as string, metadataString],
+        target: { tabId },
+        world: 'MAIN',
+    });
+    return result;
+}
+
+export async function deleteMessage(tabId: number, chatId: string, messageId: string) {
+    const [{ result }] = await chrome.scripting.executeScript({
+        func: (chatId: string, messageId: string) => {
+            // @ts-ignore
+            const WhatsappLayer: typeof WPP = window.WPP;
+
+            WhatsappLayer.chat.deleteMessage(chatId, messageId).then((deleteReturn) => console.log("Message deleted: ", deleteReturn)).catch((error) => console.log("error in deletion: ", error));
+        },
+        args: [chatId, messageId],
         target: { tabId },
         world: 'MAIN',
     });

@@ -58,15 +58,23 @@ export class AuditableChatStateMachine {
 
                 break;
             case AuditableChatStates.WAITING_ACK:
+                if (incomingMessage.content === AuditableChatOptions.END) {
+                    await AuditableChatStateMachine.removeAuditableChatReference(chatId);
+                    auditableChat.currentState = AuditableChatStates.IDLE;
+                    break;
+                }
+
                 const internalCounter = auditableState?.auditableChatReference?.counter;
-                if (!ackMetadata.success) throw new Error("Message arrived instead of ACK, should start AtD Block.");
+                if (!ackMetadata.success && (incomingMessage as AuditableMessage).author === (incomingMessage as AuditableMessage).chatId) throw new Error("Message arrived instead of ACK, should start AtD Block.");
+                console.log("Ack received!", ackMetadata.data);
+                console.log("internal state: ", auditableState?.auditableChatReference);
                 if (!internalCounter) throw new Error("No internal counter present.");
-                if (ackMetadata.data.counter > internalCounter) throw new Error("Messages arrived out of order.");
+                if (ackMetadata.success && ackMetadata.data.counter + 1 > internalCounter) throw new Error("Messages arrived out of order.");
                 // If the ack counter is less than the internal counter, should keep at WAITING_ACK state
 
                 // TODO: Include signature verifying in the future
 
-                if (ackMetadata.data.counter === internalCounter) auditableChat.currentState = AuditableChatStates.ONGOING;
+                if (ackMetadata.success && ackMetadata.data.counter + 1 === internalCounter) auditableChat.currentState = AuditableChatStates.ONGOING;
                 break;
             default:
                 throw new Error(`Unexpected State in conversation: ${auditableChat.currentState}`)

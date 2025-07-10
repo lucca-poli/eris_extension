@@ -7,25 +7,17 @@ const tabManager = new TabManager();
 setupTabsListeners(tabManager);
 setupChromeListeners(tabManager);
 
-// On state changes
-//chrome.storage.onChanged.addListener((changes) => {
-//    const entries = Object.entries(changes) as [string, {
-//        oldValue?: Record<string, ChatState>,
-//        newValue?: Record<string, ChatState>,
-//    }][];
-//    for (const [key, { oldValue, newValue }] of entries) {
-//        if (key !== AuditableChat.STORAGE_KEY || !oldValue || !newValue) continue;
+// chrome.storage.onChanged.addListener((changes, areaName) => {
+//     console.group(`%c🔄 Chrome Storage Change in ${areaName}`, 'color: #2196F3; font-weight: bold;');
 //
-//        const oldChatIds = Object.keys(oldValue);
-//        const newChatIds = Object.keys(newValue);
-//        const chatIds = Array.from(new Set([...oldChatIds, ...newChatIds]));
+//     for (const [key, change] of Object.entries(changes)) {
+//         console.log(`Key: ${key}`);
+//         console.log('Old Value:', change.oldValue);
+//         console.log('New Value:', change.newValue);
+//         console.log('---');
+//     }
 //
-//        chatIds.forEach((chatId) => {
-//            const oldState = oldValue[chatId]?.currentState;
-//            const newState = newValue[chatId]?.currentState;
-//
-//            const oldStateIsRequest = oldState === AuditableChatStates.REQUEST_SENT || oldState === AuditableChatStates.REQUEST_RECEIVED;
-//            if (oldStateIsRequest && newState === AuditableChatStates.ONGOING) auditableChats.set(chatId, new AuditableChat(chatId));
-//        });
-//    }
-//})
+//     console.log('Area:', areaName); // 'local', 'sync', 'managed', or 'session'
+//     console.log('Timestamp:', new Date().toISOString());
+//     console.groupEnd();
+// });

@@ -63,11 +63,10 @@ export class AuditableChat {
 
     static async generateBlock(commitedMessage: string, previousBlockState: BlockState) {
         const { hash, counter } = previousBlockState;
-        const updatedCounter = counter + 1;
 
         const hashArgs: HashArgs = {
             previousHash: hash,
-            counter: updatedCounter,
+            counter,
             commitedMessage
         };
         console.log("hashArgs: ", hashArgs);
@@ -76,7 +75,7 @@ export class AuditableChat {
         return {
             hash: newHash,
             previousHash: hash,
-            counter: updatedCounter,
+            counter,
             commitedMessage
         } as AuditableBlock;
     }
