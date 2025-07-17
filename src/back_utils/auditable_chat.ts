@@ -8,14 +8,6 @@ export class AuditableChat {
         console.log("Non expected call to constructor.")
     };
 
-    //static async #getCounter(chatId: string): Promise<number> {
-    //    const auditableChatState = await AuditableChatStateMachine.getAuditable(chatId);
-    //    const auditableReference = auditableChatState?.auditableChatReference;
-    //    if (!auditableReference) throw new Error(`Chat with id ${chatId} still has no reference. ${auditableChatState}`);
-    //
-    //    return auditableReference.auditableMessagesCounter
-    //}
-
     static async generateAuditableSeed(chatId: string): Promise<string> {
         const userId = await AuditableChatStateMachine.getUserId();
         if (!userId) throw new Error("No userId found.");
@@ -40,9 +32,9 @@ export class AuditableChat {
     }
 
     static async generateCommitedMessage(chatId: string, messageToProcess: AuditableMessageContent | AuditableChatMetadata, counter: number) {
-        const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
-        if (!auditableState?.auditableChatReference) throw new Error("Internal state for this chat ended earlier than expected.");
-        const seed = auditableState.auditableChatReference?.auditableChatSeed;
+        const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
+        if (!auditableState?.internalAuditableChatVariables) throw new Error("Internal state for this chat ended earlier than expected.");
+        const seed = auditableState.internalAuditableChatVariables?.auditableChatSeed;
 
         const commitedKeyArgs: PRFArgs = {
             seed,

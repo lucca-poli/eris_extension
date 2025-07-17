@@ -13,7 +13,7 @@ export enum ActionOptions {
     DEBUG = "DEBUG"
 };
 
-export enum AuditableChatOptions {
+export enum AuditableControlMessage {
     REQUEST = "Requesting auditable conversation.",
     ACCEPT = "Auditable conversation accepted.",
     DENY = "Auditable conversation denied.",
@@ -36,10 +36,10 @@ export type InternalMessage = {
 
 export type ChatState = {
     currentState: AuditableChatStates,
-    auditableChatReference?: AuditableChatReference
+    internalAuditableChatVariables?: InternalAuditableChatVariables
 }
 
-export type AuditableChatReference = {
+export type InternalAuditableChatVariables = {
     auditableChatSeed: string;
     counter: number;
     previousHash: string;
@@ -114,10 +114,10 @@ export type AckMetadata = {
     counter: number;
     sender: string;
     receiver: string;
-    content: AuditableChatOptions;
+    content: AuditableControlMessage;
 }
 
-export const AuditableChatOptionsSchema = z.enum(AuditableChatOptions);
+export const AuditableChatOptionsSchema = z.enum(AuditableControlMessage);
 
 export const AckMetadataSchema = z.object({
     blockHash: z.string(),

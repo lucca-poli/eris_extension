@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { AckMetadata, ActionOptions, AuditableBlock, AuditableChatMetadata, AuditableChatOptions, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, BlockState, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
+import { AckMetadata, ActionOptions, AuditableChatMetadata, AuditableControlMessage, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, BlockState, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
 import { AuditableChat } from "./auditable_chat";
 import { deleteMessage, getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
@@ -11,8 +11,8 @@ async function verificationRoutine(chatId: string, auditableMessage: AuditableMe
 
     // Verifying incomingMessage content
     const auditableState = (
-        await AuditableChatStateMachine.getAuditable(chatId)
-    )?.auditableChatReference;
+        await AuditableChatStateMachine.getAuditableChat(chatId)
+    )?.internalAuditableChatVariables;
     if (!auditableState) throw new Error("Auditable chat has no state.");
     const { previousHash, counter } = auditableState;
     console.log("auditable state: ", auditableState)
@@ -62,8 +62,8 @@ export function setupChromeListeners(tabManager: TabManager) {
             if (auditableMessage.author === userId) return;
 
             const auditableState = (
-                await AuditableChatStateMachine.getAuditable(chatId)
-            )?.auditableChatReference;
+                await AuditableChatStateMachine.getAuditableChat(chatId)
+            )?.internalAuditableChatVariables;
             if (!auditableState) throw new Error("Auditable chat has no state.");
             const { counter } = auditableState;
 
@@ -71,7 +71,7 @@ export function setupChromeListeners(tabManager: TabManager) {
 
             // Updating internal state
             await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
-            console.log("State after updating: ", await AuditableChatStateMachine.getAuditable(chatId));
+            console.log("State after updating: ", await AuditableChatStateMachine.getAuditableChat(chatId));
 
             // Send ACK
             const ackMetadata: AckMetadata = {
@@ -79,7 +79,7 @@ export function setupChromeListeners(tabManager: TabManager) {
                 blockHash: auditableBlock.hash,
                 sender: userId,
                 receiver: chatId,
-                content: AuditableChatOptions.ACK
+                content: AuditableControlMessage.ACK
             };
             console.log("Ack sent: ", ackMetadata);
             const ackResponse = await sendTextMessage(tabId, ackMetadata);
@@ -87,7 +87,7 @@ export function setupChromeListeners(tabManager: TabManager) {
             await deleteMessage(tabId, chatId, ackResponse.id);
             console.log("Ack message deleted.")
 
-            console.log("State after ack sent: ", await AuditableChatStateMachine.getAuditable(chatId));
+            console.log("State after ack sent: ", await AuditableChatStateMachine.getAuditableChat(chatId));
         })();
     });
 
@@ -104,16 +104,16 @@ export function setupChromeListeners(tabManager: TabManager) {
                 // User envia mensagem de aceite
                 const seed = await AuditableChat.generateAuditableSeed(chatId)
                 console.log("Seed created: ", seed)
-                const auditableState = await AuditableChatStateMachine.setAuditableStart(chatId, seed);
-                if (!auditableState.auditableChatReference) throw new Error("Chat has no state");
+                const auditableState = await AuditableChatStateMachine.setAuditableChatStart(chatId, seed);
+                if (!auditableState.internalAuditableChatVariables) throw new Error("Chat has no state");
 
                 const auditableMetadata: AuditableChatMetadata = {
                     timestamp: new Date().toISOString().split('T')[0]
                 }
 
                 const initChatState: BlockState = {
-                    hash: auditableState.auditableChatReference?.previousHash,
-                    counter: auditableState.auditableChatReference?.counter
+                    hash: auditableState.internalAuditableChatVariables?.previousHash,
+                    counter: auditableState.internalAuditableChatVariables?.counter
                 }
 
                 const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
@@ -129,10 +129,10 @@ export function setupChromeListeners(tabManager: TabManager) {
                     author: auditableMessage.author
                 }
 
-                const auditableChat = await AuditableChatStateMachine.getAuditable(chatId);
+                const auditableChat = await AuditableChatStateMachine.getAuditableChat(chatId);
                 console.log("Current State before sending message: ", auditableChat);
                 if (!auditableChat) throw new Error("No auditable chat found.");
-                const internalState = auditableChat.auditableChatReference;
+                const internalState = auditableChat.internalAuditableChatVariables;
                 if (!internalState) throw new Error("No chat reference found.");
 
                 const previousBlockState: BlockState = {

@@ -1,6 +1,6 @@
 import "@wppconnect/wa-js"
 import WPP from "@wppconnect/wa-js"
-import { ActionOptions, InternalMessage, AuditableMessage, AuditableMessageMetadataSchema, AckMetadataSchema, AckMetadata, AuditableChatOptions, AuditableMessageMetadata } from "./utils/types";
+import { ActionOptions, InternalMessage, AuditableMessage, AckMetadataSchema, AckMetadata, AuditableControlMessage, AuditableMessageMetadata } from "./utils/types";
 
 // @ts-ignore
 const WhatsappLayer: typeof WPP = window.WPP;
@@ -12,25 +12,24 @@ WhatsappLayer.on('chat.new_message', async (chatMessage) => {
         : undefined;
     let arrivedMessage: AuditableMessage | AckMetadata;
 
-    const auditableMetadata = AuditableMessageMetadataSchema.safeParse(incomingMetadataObject);
     const ackMetadata = AckMetadataSchema.safeParse(incomingMetadataObject);
 
     // Ignorar a mensagem se é um ACK na minha visão se fui eu que enviei
     if (ackMetadata.success && chatMessage.id.fromMe) return;
 
     if (ackMetadata.success) {
-        if (chatMessage.body !== AuditableChatOptions.ACK) throw new Error("Ack message differs from expected message.");
+        if (chatMessage.body !== AuditableControlMessage.ACK) throw new Error("Ack message differs from expected message.");
         arrivedMessage = ackMetadata.data;
         const chatId = chatMessage.id?.remote?._serialized as string;
         const messageId = chatMessage.id._serialized;
         if (!chatId) throw new Error(`New ack has no message: ${arrivedMessage}`);
         await WhatsappLayer.chat.deleteMessage(chatId, messageId);
-    } else { // usar auditableMetadata.sucess pra fazer else if
+    } else { // The incoming message can either be an auditable message or a normal message.
         arrivedMessage = {
             content: chatMessage.body,
             chatId: chatMessage.id?.remote?._serialized as string,
             author: chatMessage.from?._serialized as string,
-            metadata: auditableMetadata.data,
+            metadata: incomingMetadataObject as AuditableMessageMetadata | undefined,
             messageId: chatMessage.id._serialized,
             timestamp: chatMessage.t,
         };

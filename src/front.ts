@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { AckMetadata, AckMetadataSchema, ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, AuditableMessageMetadataSchema, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
+import { AckMetadata, AckMetadataSchema, ActionOptions, AuditableBlock, AuditableControlMessage, AuditableChatStates, AuditableMessage, AuditableMessageMetadataSchema, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -42,15 +42,15 @@ class DomProcessor {
             endAuditableButton.innerText = "🔲";
 
             endAuditableButton.addEventListener("click", async () => {
-                const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+                const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
                 if (!auditableState) throw new Error("There should be a conversation created.");
-                if (!auditableState.auditableChatReference) throw new Error("There should be a auditable chat reference.");
+                if (!auditableState.internalAuditableChatVariables) throw new Error("There should be a auditable chat reference.");
                 console.log("auditableState before finishing: ", auditableState);
 
                 const returnedMessageId: string = await chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
-                        content: AuditableChatOptions.END,
+                        content: AuditableControlMessage.END,
                         chatId,
                         author: await AuditableChatStateMachine.getUserId()
                     } as AuditableMessage
@@ -60,7 +60,7 @@ class DomProcessor {
                     chatId,
                     options: {
                         // Getting double the amount to avoid problems with acks
-                        count: auditableState.auditableChatReference.counter * 2,
+                        count: auditableState.internalAuditableChatVariables.counter * 2,
                         direction: "before",
                         id: returnedMessageId
                     }
@@ -73,7 +73,7 @@ class DomProcessor {
 
                 // 1. Tirar as mensagens antes da inicial
                 const firstStartingMessageIndex = auditableMessagesRaw.reverse().findIndex((auditableMessage) =>
-                    (auditableMessage.content === AuditableChatOptions.ACCEPT && auditableMessage.metadata?.block.counter === 0)
+                    (auditableMessage.content === AuditableControlMessage.ACCEPT && auditableMessage.metadata?.block.counter === 0)
                 );
                 if (firstStartingMessageIndex === -1) throw new Error("Couldnt find starting message.");
                 const currentAuditableMessages = auditableMessagesRaw.slice(0, firstStartingMessageIndex + 1).reverse();
@@ -89,7 +89,7 @@ class DomProcessor {
                 const publicJson = JSON.stringify(publicLogs);
 
                 console.log("Public Logs: ", publicLogs);
-                const seed = auditableState.auditableChatReference?.auditableChatSeed;
+                const seed = auditableState.internalAuditableChatVariables?.auditableChatSeed;
                 const counters = publicLogs.map((hashblock) => hashblock.counter);
                 console.log("counters: ", counters);
                 const commitedKeys: string[] = await chrome.runtime.sendMessage({
@@ -149,7 +149,7 @@ class DomProcessor {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
-                        content: AuditableChatOptions.REQUEST,
+                        content: AuditableControlMessage.REQUEST,
                         chatId,
                         author: await AuditableChatStateMachine.getUserId()
                     } as AuditableMessage
@@ -175,7 +175,7 @@ class DomProcessor {
                     payload: {
                         auditableMessage: {
                             chatId,
-                            content: AuditableChatOptions.ACCEPT,
+                            content: AuditableControlMessage.ACCEPT,
                             author: await AuditableChatStateMachine.getUserId(),
                         },
                         startingMessage: true,
@@ -188,7 +188,7 @@ class DomProcessor {
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
                         chatId,
-                        content: AuditableChatOptions.DENY,
+                        content: AuditableControlMessage.DENY,
                         author: await AuditableChatStateMachine.getUserId()
                     } as AuditableMessage
                 } as InternalMessage);
@@ -335,25 +335,25 @@ window.addEventListener("message", async (event: MessageEvent) => {
 
         // Update DOM
         if (currentAuditableChatId && currentAuditableChatId === ackMetada.data.sender) {
-            const currentAuditableChat = await AuditableChatStateMachine.getAuditable(currentAuditableChatId);
+            const currentAuditableChat = await AuditableChatStateMachine.getAuditableChat(currentAuditableChatId);
             if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
             domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
         }
     } else {
         const auditableMessage = incomingChatMessage as AuditableMessage;
         const { chatId } = auditableMessage;
-        const oldState = await AuditableChatStateMachine.getAuditable(chatId);
+        const oldState = await AuditableChatStateMachine.getAuditableChat(chatId);
         console.log("oldState is: ", oldState);
 
         // Manage AuditableChats state
         const newState = await AuditableChatStateMachine.updateState(chatId, auditableMessage, auditableMessage.metadata?.seed);
         console.log("newState is: ", newState);
         if (newState) currentAuditableChatId = chatId;
-        console.log("newState really is: ", await AuditableChatStateMachine.getAuditable(chatId));
+        console.log("newState really is: ", await AuditableChatStateMachine.getAuditableChat(chatId));
 
         // Update DOM
         if (currentAuditableChatId && currentAuditableChatId === chatId) {
-            const currentAuditableChat = await AuditableChatStateMachine.getAuditable(currentAuditableChatId);
+            const currentAuditableChat = await AuditableChatStateMachine.getAuditableChat(currentAuditableChatId);
             if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
             domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
         }
@@ -378,15 +378,15 @@ window.addEventListener("message", async (event: MessageEvent) => {
     if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_CHAT) return;
 
     const chatId: string = internalMessage.payload;
-    if (currentAuditableChatId && (await AuditableChatStateMachine.getAuditable(currentAuditableChatId))?.currentState === AuditableChatStates.IDLE) {
-        await AuditableChatStateMachine.removeAuditable(currentAuditableChatId);
+    if (currentAuditableChatId && (await AuditableChatStateMachine.getAuditableChat(currentAuditableChatId))?.currentState === AuditableChatStates.IDLE) {
+        await AuditableChatStateMachine.removeAuditableChat(currentAuditableChatId);
     }
 
-    const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+    const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
     const currentState = auditableState?.currentState || AuditableChatStates.IDLE;
-    AuditableChatStateMachine.setAuditable(chatId, {
+    AuditableChatStateMachine.setAuditableChat(chatId, {
         currentState,
-        auditableChatReference: auditableState?.auditableChatReference
+        internalAuditableChatVariables: auditableState?.internalAuditableChatVariables
     });
     currentAuditableChatId = chatId;
 

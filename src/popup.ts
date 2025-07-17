@@ -27,7 +27,7 @@ async function loadPopupContent(root: HTMLElement) {
 
     // Set up the delete handler properly
     deleteAllButton.onclick = async () => {
-        await AuditableChatStateMachine.removeAll();
+        await AuditableChatStateMachine.removeAllChats();
 
         // Option 1: Reload popup content without closing/reopening
         await loadPopupContent(root);

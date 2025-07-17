@@ -1,4 +1,4 @@
-import { AckMetadata, AckMetadataSchema, AuditableChatOptions, AuditableChatReference, AuditableChatStates, AuditableMessage, ChatState } from "./types";
+import { AckMetadata, AckMetadataSchema, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, AuditableMessage, ChatState } from "./types";
 
 export class AuditableChatStateMachine {
     private chatId: string;
@@ -12,14 +12,14 @@ export class AuditableChatStateMachine {
     };
 
     static async updateState(chatId: string, incomingMessage: AuditableMessage | AckMetadata, seed?: string) {
-        const auditableState = await AuditableChatStateMachine.getAuditable(chatId);
+        const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
         const auditableChat = new AuditableChatStateMachine(chatId, auditableState?.currentState);
 
         const ackMetadata = AckMetadataSchema.safeParse(incomingMessage);
 
         switch (auditableChat.getCurrentState()) {
             case AuditableChatStates.IDLE:
-                if (incomingMessage.content === AuditableChatOptions.REQUEST) {
+                if (incomingMessage.content === AuditableControlMessage.REQUEST) {
                     const authorIsMe = (await AuditableChatStateMachine.getUserId()) === (incomingMessage as AuditableMessage).author;
                     if (authorIsMe) {
                         auditableChat.currentState = AuditableChatStates.REQUEST_SENT;
@@ -29,26 +29,26 @@ export class AuditableChatStateMachine {
                 }
                 break;
             case AuditableChatStates.REQUEST_SENT:
-                if (incomingMessage.content === AuditableChatOptions.ACCEPT) {
+                if (incomingMessage.content === AuditableControlMessage.ACCEPT) {
                     console.log("Seed arrived: ", seed)
                     if (!seed) {
                         console.error("Acceptation message: ", incomingMessage);
                         throw new Error("Seed not sent in acceptation message.");
                     }
-                    await AuditableChatStateMachine.setAuditableStart(chatId, seed);
+                    await AuditableChatStateMachine.setAuditableChatStart(chatId, seed);
 
                     auditableChat.currentState = AuditableChatStates.ONGOING;
                 }
-                if (incomingMessage.content === AuditableChatOptions.DENY) auditableChat.currentState = AuditableChatStates.IDLE
+                if (incomingMessage.content === AuditableControlMessage.DENY) auditableChat.currentState = AuditableChatStates.IDLE
                 break;
             case AuditableChatStates.REQUEST_RECEIVED:
-                if (incomingMessage.content === AuditableChatOptions.ACCEPT) {
+                if (incomingMessage.content === AuditableControlMessage.ACCEPT) {
                     auditableChat.currentState = AuditableChatStates.ONGOING;
                 }
-                if (incomingMessage.content === AuditableChatOptions.DENY) auditableChat.currentState = AuditableChatStates.IDLE
+                if (incomingMessage.content === AuditableControlMessage.DENY) auditableChat.currentState = AuditableChatStates.IDLE
                 break;
             case AuditableChatStates.ONGOING:
-                if (incomingMessage.content === AuditableChatOptions.END) {
+                if (incomingMessage.content === AuditableControlMessage.END) {
                     await AuditableChatStateMachine.removeAuditableChatReference(chatId);
                     auditableChat.currentState = AuditableChatStates.IDLE;
                     break;
@@ -58,16 +58,16 @@ export class AuditableChatStateMachine {
 
                 break;
             case AuditableChatStates.WAITING_ACK:
-                if (incomingMessage.content === AuditableChatOptions.END) {
+                if (incomingMessage.content === AuditableControlMessage.END) {
                     await AuditableChatStateMachine.removeAuditableChatReference(chatId);
                     auditableChat.currentState = AuditableChatStates.IDLE;
                     break;
                 }
 
-                const internalCounter = auditableState?.auditableChatReference?.counter;
+                const internalCounter = auditableState?.internalAuditableChatVariables?.counter;
                 if (!ackMetadata.success && (incomingMessage as AuditableMessage).author === (incomingMessage as AuditableMessage).chatId) throw new Error("Message arrived instead of ACK, should start AtD Block.");
                 console.log("Ack received!", ackMetadata.data);
-                console.log("internal state: ", auditableState?.auditableChatReference);
+                console.log("internal state: ", auditableState?.internalAuditableChatVariables);
                 if (!internalCounter) throw new Error("No internal counter present.");
                 if (ackMetadata.success && ackMetadata.data.counter + 1 > internalCounter) throw new Error("Messages arrived out of order.");
                 // If the ack counter is less than the internal counter, should keep at WAITING_ACK state
@@ -83,10 +83,10 @@ export class AuditableChatStateMachine {
         const stateChanged = auditableState?.currentState !== auditableChat.getCurrentState();
         if (!stateChanged) return undefined;
         const newChatState: ChatState = {
-            auditableChatReference: (await AuditableChatStateMachine.getAuditable(chatId))?.auditableChatReference,
+            internalAuditableChatVariables: (await AuditableChatStateMachine.getAuditableChat(chatId))?.internalAuditableChatVariables,
             currentState: auditableChat.getCurrentState(),
         };
-        await AuditableChatStateMachine.setAuditable(chatId, newChatState);
+        await AuditableChatStateMachine.setAuditableChat(chatId, newChatState);
         return newChatState;
     }
 
@@ -106,46 +106,46 @@ export class AuditableChatStateMachine {
         });
     }
 
-    static async getAuditable(chatId: string): Promise<ChatState | undefined> {
+    static async getAuditableChat(chatId: string): Promise<ChatState | undefined> {
         const chats = await this.getAll();
         return chats[chatId];
     }
 
-    static async setAuditableStart(chatId: string, seed: string): Promise<ChatState> {
-        const chat = await this.getAuditable(chatId);
+    static async setAuditableChatStart(chatId: string, seed: string): Promise<ChatState> {
+        const chat = await this.getAuditableChat(chatId);
         if (!chat) throw new Error("Trying to set the init Id in an unexistent chat.");
 
-        const auditableChatReference: AuditableChatReference = {
+        const internalAuditableChatVariables: InternalAuditableChatVariables = {
             counter: 0,
             previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
             auditableChatSeed: seed,
         };
-        chat.auditableChatReference = auditableChatReference;
+        chat.internalAuditableChatVariables = internalAuditableChatVariables;
 
         console.log("Auditable Chat is now: ", chat);
-        await this.setAuditable(chatId, chat);
+        await this.setAuditableChat(chatId, chat);
 
         return chat
     }
 
     static async updateAuditableChatState(chatId: string, newHashReference: string): Promise<void> {
-        const chat = await this.getAuditable(chatId);
+        const chat = await this.getAuditableChat(chatId);
         if (!chat) throw new Error("Trying to get an unexistent chat.");
 
-        const chatInternalState = chat.auditableChatReference;
+        const chatInternalState = chat.internalAuditableChatVariables;
         if (!chatInternalState) throw new Error("Chat has no internal state initialized.");
         console.log("State before updating", chatInternalState);
 
         chatInternalState.counter += 1;
         chatInternalState.previousHash = newHashReference;
 
-        await this.setAuditable(chatId, {
+        await this.setAuditableChat(chatId, {
             currentState: chat.currentState,
-            auditableChatReference: chatInternalState
+            internalAuditableChatVariables: chatInternalState
         });
     }
 
-    static async setAuditable(chatId: string, state: ChatState): Promise<void> {
+    static async setAuditableChat(chatId: string, state: ChatState): Promise<void> {
         const chats = await this.getAll();
         chats[chatId] = state;
         return new Promise((resolve) => {
@@ -170,13 +170,13 @@ export class AuditableChatStateMachine {
     static async removeIdleChats(): Promise<void> {
         const chats = await this.getAll();
         Object.keys(chats).forEach(async (chatId) => {
-            const auditableChatState = await AuditableChatStateMachine.getAuditable(chatId) as ChatState;
+            const auditableChatState = await AuditableChatStateMachine.getAuditableChat(chatId) as ChatState;
             const auditableState = auditableChatState.currentState;
-            if (auditableState === AuditableChatStates.IDLE) await AuditableChatStateMachine.removeAuditable(chatId);
+            if (auditableState === AuditableChatStates.IDLE) await AuditableChatStateMachine.removeAuditableChat(chatId);
         });
     }
 
-    static async removeAuditable(chatId: string): Promise<void> {
+    static async removeAuditableChat(chatId: string): Promise<void> {
         const chats = await this.getAll();
         delete chats[chatId];
         return new Promise((resolve) => {
@@ -187,13 +187,13 @@ export class AuditableChatStateMachine {
     static async removeAuditableChatReference(chatId: string): Promise<void> {
         const chats = await this.getAll();
         const chat = chats[chatId];
-        delete chat?.auditableChatReference;
+        delete chat?.internalAuditableChatVariables;
         return new Promise((resolve) => {
             chrome.storage.local.set({ [this.STORAGE_KEY]: chats }, () => resolve());
         });
     }
 
-    static async removeAll(): Promise<void> {
+    static async removeAllChats(): Promise<void> {
         return new Promise((resolve) => {
             chrome.storage.local.remove(this.STORAGE_KEY, () => resolve());
         });
