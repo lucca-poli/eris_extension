@@ -84,7 +84,7 @@ export function setupChromeListeners(tabManager: TabManager) {
             console.log("Ack sent: ", ackMetadata);
             const ackResponse = await sendTextMessage(tabId, ackMetadata);
             if (!ackResponse) throw new Error("Problem in sending ACK.");
-            // await deleteMessage(tabId, chatId, ackResponse.id);
+            await deleteMessage(tabId, chatId, ackResponse.id);
             console.log("Ack message deleted.")
 
             console.log("State after ack sent: ", await AuditableChatStateMachine.getAuditable(chatId));

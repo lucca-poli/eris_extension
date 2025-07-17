@@ -24,7 +24,7 @@ WhatsappLayer.on('chat.new_message', async (chatMessage) => {
         const chatId = chatMessage.id?.remote?._serialized as string;
         const messageId = chatMessage.id._serialized;
         if (!chatId) throw new Error(`New ack has no message: ${arrivedMessage}`);
-        // await WhatsappLayer.chat.deleteMessage(chatId, messageId);
+        await WhatsappLayer.chat.deleteMessage(chatId, messageId);
     } else { // usar auditableMetadata.sucess pra fazer else if
         arrivedMessage = {
             content: chatMessage.body,

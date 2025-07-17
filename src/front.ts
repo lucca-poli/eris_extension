@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { AckMetadata, AckMetadataSchema, ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
+import { AckMetadata, AckMetadataSchema, ActionOptions, AuditableBlock, AuditableChatOptions, AuditableChatStates, AuditableMessage, AuditableMessageMetadataSchema, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -59,16 +59,30 @@ class DomProcessor {
                 const getMessages: GetMessages = {
                     chatId,
                     options: {
-                        // Add one to include initial block
-                        count: auditableState.auditableChatReference.counter,
+                        // Getting double the amount to avoid problems with acks
+                        count: auditableState.auditableChatReference.counter * 2,
                         direction: "before",
                         id: returnedMessageId
                     }
                 }
-                const auditableMessages: AuditableMessage[] = await chrome.runtime.sendMessage({
+                const auditableMessagesRaw: AuditableMessage[] = await chrome.runtime.sendMessage({
                     action: ActionOptions.GET_MESSAGES,
                     payload: getMessages
                 } as InternalMessage);
+                console.log("Auditable Messages raw: ", auditableMessagesRaw);
+
+                // 1. Tirar as mensagens antes da inicial
+                const firstStartingMessageIndex = auditableMessagesRaw.reverse().findIndex((auditableMessage) =>
+                    (auditableMessage.content === AuditableChatOptions.ACCEPT && auditableMessage.metadata?.block.counter === 0)
+                );
+                if (firstStartingMessageIndex === -1) throw new Error("Couldnt find starting message.");
+                const currentAuditableMessages = auditableMessagesRaw.slice(0, firstStartingMessageIndex + 1).reverse();
+                // 2. Tirar as mensagens de ACK
+                const auditableMessages = currentAuditableMessages.filter((auditableMessage) => {
+                    const auditableMetadata = AuditableMessageMetadataSchema.safeParse(auditableMessage.metadata);
+                    return auditableMetadata.success;
+                });
+
                 console.log("Auditable Messages: ", auditableMessages);
 
                 const publicLogs = auditableMessages.map((message) => message.metadata?.block as AuditableBlock);
