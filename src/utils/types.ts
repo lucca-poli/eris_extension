@@ -1,6 +1,9 @@
+import { z } from "zod/v4"
+
 export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
+    GENERATE_AND_SEND_BLOCK = "GENERATE_AND_SEND_BLOCK",
     GET_MESSAGES = "GET_MESSAGES",
     GET_COMMITED_KEYS = "GET_COMMITED_KEYS",
     SET_INPUT_BOX = "SET_INPUT_BOX",
@@ -14,13 +17,15 @@ export enum AuditableChatOptions {
     REQUEST = "Requesting auditable conversation.",
     ACCEPT = "Auditable conversation accepted.",
     DENY = "Auditable conversation denied.",
-    END = "Auditable conversation ended. Logs available in popup."
+    END = "Auditable conversation ended. Logs available in popup.",
+    ACK = "Confirmation ACK sent."
 };
 
 export enum AuditableChatStates {
     REQUEST_SENT = "REQUEST_SENT",
     REQUEST_RECEIVED = "REQUEST_RECEIVED",
     ONGOING = "ONGOING",
+    WAITING_ACK = "WAITING_ACK",
     IDLE = "IDLE"
 };
 
@@ -35,9 +40,9 @@ export type ChatState = {
 }
 
 export type AuditableChatReference = {
-    currentAuditableChatInitId: string,
-    auditableMessagesCounter: number,
-    initialBlock: AuditableBlock
+    auditableChatSeed: string;
+    counter: number;
+    previousHash: string;
 }
 
 export type SendFileMessage = {
@@ -57,23 +62,27 @@ export type GetMessages = {
     options: GetMessagesOptions
 }
 
-export type ProcessAuditableMessage = {
-    incomingMessage: AuditableMessage,
-    toCalculateHash: boolean
-}
-
 export type AuditableMessage = {
-    chatId: string,
-    messageId?: string,
-    content?: string,
-    author: string,
-    hash?: AuditableBlock,
-    timestamp?: number,
+    chatId: string;
+    messageId?: string;
+    content?: string;
+    author: string;
+    metadata?: AuditableMessageMetadata;
+    timestamp?: number;
 }
 
 export type AuditableMessageContent = {
     content: string;
     author: string;
+}
+
+export type GenerateAuditableMessage = {
+    auditableMessage: AuditableMessage;
+    startingMessage: boolean;
+}
+
+export type AuditableChatMetadata = {
+    timestamp: string;
 }
 
 export type AuditableBlock = {
@@ -83,9 +92,55 @@ export type AuditableBlock = {
     commitedMessage: string
 }
 
+export type AuditableMessageMetadata = {
+    block: AuditableBlock;
+    seed?: string;
+}
+
+export const AuditableBlockSchema = z.object({
+    hash: z.string(),
+    previousHash: z.string(),
+    counter: z.number(),
+    commitedMessage: z.string()
+});
+
+export const AuditableMessageMetadataSchema = z.object({
+    block: AuditableBlockSchema,
+    seed: z.string().optional()
+});
+
+export type AckMetadata = {
+    blockHash: string;
+    counter: number;
+    sender: string;
+    receiver: string;
+    content: AuditableChatOptions;
+}
+
+export const AuditableChatOptionsSchema = z.enum(AuditableChatOptions);
+
+export const AckMetadataSchema = z.object({
+    blockHash: z.string(),
+    counter: z.number(),
+    sender: z.string(),
+    receiver: z.string(),
+    content: AuditableChatOptionsSchema
+});
+
+export type BlockState = {
+    hash: string;
+    counter: number;
+}
+
 export type PRFArgs = {
     seed: string;
     counter: number;
+}
+
+export type RandomSeedSalt = {
+    chatId: string,
+    userId: string,
+    currentTime: number
 }
 
 export type GetCommitedKeys = {

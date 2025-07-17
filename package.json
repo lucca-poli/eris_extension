@@ -11,7 +11,8 @@
   "author": "Luiz Carlos de Azevedo Santana",
   "license": "ISC",
   "dependencies": {
-    "@wppconnect/wa-js": "^3.17.7"
+    "@wppconnect/wa-js": "^3.17.7",
+    "zod": "^3.25.57"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.300",
