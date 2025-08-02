@@ -1,8 +1,11 @@
+import { finishingAuditableChatRoutine } from "./utils/finishing_routine";
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { AckMetadata, AckMetadataSchema, ActionOptions, AuditableBlock, AuditableControlMessage, AuditableChatStates, AuditableMessage, AuditableMessageMetadataSchema, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./utils/types"
+import { AckMetadata, AckMetadataSchema, ActionOptions, AuditableControlMessage, AuditableChatStates, AuditableMessage, GenerateAuditableMessage, InternalMessage } from "./utils/types";
+import { displayRequestWindow } from "./utils/request_popup";
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
+    private static AUDITABLE_SUBTITLE = ' - Secure Chat Active';
     constructor() {
         this.currentChatButton = null;
     }
@@ -56,85 +59,12 @@ class DomProcessor {
                     } as AuditableMessage
                 } as InternalMessage);
 
-                const getMessages: GetMessages = {
+                await finishingAuditableChatRoutine(
                     chatId,
-                    options: {
-                        // Getting double the amount to avoid problems with acks
-                        count: auditableState.internalAuditableChatVariables.counter * 2,
-                        direction: "before",
-                        id: returnedMessageId
-                    }
-                }
-                const auditableMessagesRaw: AuditableMessage[] = await chrome.runtime.sendMessage({
-                    action: ActionOptions.GET_MESSAGES,
-                    payload: getMessages
-                } as InternalMessage);
-                console.log("Auditable Messages raw: ", auditableMessagesRaw);
-
-                // 1. Tirar as mensagens antes da inicial
-                const firstStartingMessageIndex = auditableMessagesRaw.reverse().findIndex((auditableMessage) =>
-                    (auditableMessage.content === AuditableControlMessage.ACCEPT && auditableMessage.metadata?.block.counter === 0)
+                    auditableState.internalAuditableChatVariables?.auditableChatSeed,
+                    returnedMessageId,
+                    auditableState.internalAuditableChatVariables.counter * 2
                 );
-                if (firstStartingMessageIndex === -1) throw new Error("Couldnt find starting message.");
-                const currentAuditableMessages = auditableMessagesRaw.slice(0, firstStartingMessageIndex + 1).reverse();
-                // 2. Tirar as mensagens de ACK
-                const auditableMessages = currentAuditableMessages.filter((auditableMessage) => {
-                    const auditableMetadata = AuditableMessageMetadataSchema.safeParse(auditableMessage.metadata);
-                    return auditableMetadata.success;
-                });
-
-                console.log("Auditable Messages: ", auditableMessages);
-
-                const publicLogs = auditableMessages.map((message) => message.metadata?.block as AuditableBlock);
-                const publicJson = JSON.stringify(publicLogs);
-
-                console.log("Public Logs: ", publicLogs);
-                const seed = auditableState.internalAuditableChatVariables?.auditableChatSeed;
-                const counters = publicLogs.map((hashblock) => hashblock.counter);
-                console.log("counters: ", counters);
-                const commitedKeys: string[] = await chrome.runtime.sendMessage({
-                    action: ActionOptions.GET_COMMITED_KEYS,
-                    payload: { counters, seed } as GetCommitedKeys
-                } as InternalMessage);
-                console.log("commited keys: ", commitedKeys)
-
-                const privateLogs = auditableMessages.map((message, index) => {
-                    const commitedKey = commitedKeys[index]
-                    if (!commitedKey) {
-                        console.error(message);
-                        throw new Error("No counter for HashBlock.");
-                    }
-                    return {
-                        content: message.content as string,
-                        author: message.author,
-                        commitedKey,
-                        counter: counters[index]
-                    };
-                });
-                const privateJson = JSON.stringify({
-                    initialCommitedKey: commitedKeys[0],
-                    logMessages: privateLogs.slice(1)
-                });
-
-                const dateToday = new Date().toISOString().split('T')[0];
-
-                await chrome.runtime.sendMessage({
-                    action: ActionOptions.SEND_FILE_MESSAGE,
-                    payload: {
-                        chatId,
-                        fileContent: privateJson,
-                        fileName: `private_logs_${dateToday}.json`
-                    } as SendFileMessage
-                } as InternalMessage);
-
-                await chrome.runtime.sendMessage({
-                    action: ActionOptions.SEND_FILE_MESSAGE,
-                    payload: {
-                        chatId,
-                        fileContent: publicJson,
-                        fileName: `public_logs_${dateToday}.json`
-                    } as SendFileMessage
-                } as InternalMessage);
             });
 
             this.currentChatButton?.appendChild(endAuditableButton);
@@ -146,10 +76,22 @@ class DomProcessor {
             requireAuditableButton.innerText = "🔲";
 
             requireAuditableButton.addEventListener("click", async () => {
+                await displayRequestWindow(chatId);
+            });
+
+            this.currentChatButton?.appendChild(requireAuditableButton);
+        }
+
+        if (currentState === AuditableChatStates.REQUEST_SENT) {
+            const requireAuditableButton = this.createBaseButton("button", 46) as HTMLButtonElement;
+            // @ts-ignore
+            requireAuditableButton.innerText = "❌";
+
+            requireAuditableButton.addEventListener("click", async () => {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
                     payload: {
-                        content: AuditableControlMessage.REQUEST,
+                        content: AuditableControlMessage.CANCEL,
                         chatId,
                         author: await AuditableChatStateMachine.getUserId()
                     } as AuditableMessage
@@ -313,9 +255,19 @@ class DomProcessor {
         originalChatbox?.replaceWith(customInput);
     }
 
+    private setupAuditableSubtitle() {
+        const originalChatBox = document.querySelectorAll("div.x78zum5.x1q0g3np.x1iyjqo2.x6ikm8r.x10wlt62.x1jchvi3.xdod15v.x1wm35g.x1yc453h.xlyipyv.xuxw1ft.xh8yej3.x1s688f")[0]?.firstElementChild?.firstElementChild?.firstElementChild;
+        if (typeof (originalChatBox?.innerHTML) !== "string") throw new Error("Chat title not found.");
+        const newChatTitle = originalChatBox.innerHTML + DomProcessor.AUDITABLE_SUBTITLE;
+        originalChatBox.innerHTML = newChatTitle;
+    }
+
     updateChatState(currentState: AuditableChatStates, chatId: string) {
         this.updateButtonState(currentState, chatId);
-        if (currentState === AuditableChatStates.ONGOING) this.setupChatbox(chatId);
+        if (currentState === AuditableChatStates.ONGOING || currentState === AuditableChatStates.WAITING_ACK) {
+            this.setupChatbox(chatId);
+            this.setupAuditableSubtitle();
+        }
     }
 }
 
@@ -346,7 +298,10 @@ window.addEventListener("message", async (event: MessageEvent) => {
         console.log("oldState is: ", oldState);
 
         // Manage AuditableChats state
-        const newState = await AuditableChatStateMachine.updateState(chatId, auditableMessage, auditableMessage.metadata?.seed);
+        const newState = await AuditableChatStateMachine.updateState(chatId, auditableMessage, {
+            seed: auditableMessage.metadata?.seed || oldState?.internalAuditableChatVariables?.auditableChatSeed,
+            messageId: auditableMessage.messageId
+        });
         console.log("newState is: ", newState);
         if (newState) currentAuditableChatId = chatId;
         console.log("newState really is: ", await AuditableChatStateMachine.getAuditableChat(chatId));

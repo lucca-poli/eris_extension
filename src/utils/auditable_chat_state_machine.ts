@@ -1,4 +1,5 @@
-import { AckMetadata, AckMetadataSchema, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, AuditableMessage, ChatState } from "./types";
+import { finishingAuditableChatRoutine } from "./finishing_routine";
+import { AckMetadata, AckMetadataSchema, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, AuditableMessage, ChatState, AuditableMessageMetadataSchema, ActionOptions, InternalMessage } from "./types";
 
 export class AuditableChatStateMachine {
     private chatId: string;
@@ -11,11 +12,16 @@ export class AuditableChatStateMachine {
         this.currentState = currentState || AuditableChatStates.IDLE;
     };
 
-    static async updateState(chatId: string, incomingMessage: AuditableMessage | AckMetadata, seed?: string) {
+    static async updateState(chatId: string, incomingMessage: AuditableMessage | AckMetadata, options?: { messageId?: string, seed?: string }) {
         const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
         const auditableChat = new AuditableChatStateMachine(chatId, auditableState?.currentState);
 
+        console.log("incomingMessage: ", incomingMessage);
         const ackMetadata = AckMetadataSchema.safeParse(incomingMessage);
+        console.log("Is ack: ", ackMetadata.success);
+        const auditableMessageMetadata = AuditableMessageMetadataSchema.safeParse((incomingMessage as AuditableMessage).metadata);
+        console.log("Is auditableMessage: ", auditableMessageMetadata.success);
+        const messageIsOfExpectedType = auditableMessageMetadata.success || ackMetadata.success;
 
         switch (auditableChat.getCurrentState()) {
             case AuditableChatStates.IDLE:
@@ -30,25 +36,52 @@ export class AuditableChatStateMachine {
                 break;
             case AuditableChatStates.REQUEST_SENT:
                 if (incomingMessage.content === AuditableControlMessage.ACCEPT) {
-                    console.log("Seed arrived: ", seed)
-                    if (!seed) {
+                    console.log("Seed arrived: ", options?.seed)
+                    if (!options?.seed) {
                         console.error("Acceptation message: ", incomingMessage);
-                        throw new Error("Seed not sent in acceptation message.");
+                        throw new Error("Seed not sent in acceptation message. 1");
                     }
-                    await AuditableChatStateMachine.setAuditableChatStart(chatId, seed);
+                    await AuditableChatStateMachine.setAuditableChatStart(chatId, options.seed);
 
                     auditableChat.currentState = AuditableChatStates.ONGOING;
                 }
-                if (incomingMessage.content === AuditableControlMessage.DENY) auditableChat.currentState = AuditableChatStates.IDLE
+                if (incomingMessage.content === AuditableControlMessage.DENY || incomingMessage.content === AuditableControlMessage.CANCEL) auditableChat.currentState = AuditableChatStates.IDLE
                 break;
             case AuditableChatStates.REQUEST_RECEIVED:
                 if (incomingMessage.content === AuditableControlMessage.ACCEPT) {
                     auditableChat.currentState = AuditableChatStates.ONGOING;
                 }
-                if (incomingMessage.content === AuditableControlMessage.DENY) auditableChat.currentState = AuditableChatStates.IDLE
+                if (incomingMessage.content === AuditableControlMessage.DENY || incomingMessage.content === AuditableControlMessage.CANCEL) auditableChat.currentState = AuditableChatStates.IDLE
                 break;
             case AuditableChatStates.ONGOING:
-                if (incomingMessage.content === AuditableControlMessage.END) {
+                if (incomingMessage.content === AuditableControlMessage.END || incomingMessage.content === AuditableControlMessage.ABORT) {
+                    await AuditableChatStateMachine.removeAuditableChatReference(chatId);
+                    auditableChat.currentState = AuditableChatStates.IDLE;
+                    break;
+                }
+
+                if (!messageIsOfExpectedType) {
+                    const counter = auditableState?.internalAuditableChatVariables?.counter;
+                    if (!counter) throw new Error("No chat counter found.");
+                    if (!options?.seed) throw new Error("Seed not sent in acceptation message. 2");
+                    if (!options?.messageId) throw new Error("MessageId not sent in acceptation message.");
+
+                    await chrome.runtime.sendMessage({
+                        action: ActionOptions.SEND_TEXT_MESSAGE,
+                        payload: {
+                            content: AuditableControlMessage.ABORT,
+                            chatId,
+                            author: await AuditableChatStateMachine.getUserId()
+                        } as AuditableMessage
+                    } as InternalMessage);
+
+                    await finishingAuditableChatRoutine(
+                        chatId,
+                        options.seed,
+                        options.messageId,
+                        counter * 2
+                    );
+
                     await AuditableChatStateMachine.removeAuditableChatReference(chatId);
                     auditableChat.currentState = AuditableChatStates.IDLE;
                     break;
@@ -58,7 +91,34 @@ export class AuditableChatStateMachine {
 
                 break;
             case AuditableChatStates.WAITING_ACK:
-                if (incomingMessage.content === AuditableControlMessage.END) {
+                if (incomingMessage.content === AuditableControlMessage.END || incomingMessage.content === AuditableControlMessage.ABORT) {
+                    await AuditableChatStateMachine.removeAuditableChatReference(chatId);
+                    auditableChat.currentState = AuditableChatStates.IDLE;
+                    break;
+                }
+
+                if (!messageIsOfExpectedType) {
+                    const counter = auditableState?.internalAuditableChatVariables?.counter;
+                    if (!counter) throw new Error("No chat counter found.");
+                    if (!options?.seed) throw new Error("Seed not sent in acceptation message. 3");
+                    if (!options?.messageId) throw new Error("MessageId not sent in acceptation message.");
+
+                    await chrome.runtime.sendMessage({
+                        action: ActionOptions.SEND_TEXT_MESSAGE,
+                        payload: {
+                            content: AuditableControlMessage.ABORT,
+                            chatId,
+                            author: await AuditableChatStateMachine.getUserId()
+                        } as AuditableMessage
+                    } as InternalMessage);
+
+                    await finishingAuditableChatRoutine(
+                        chatId,
+                        options.seed,
+                        options.messageId,
+                        counter * 2
+                    );
+
                     await AuditableChatStateMachine.removeAuditableChatReference(chatId);
                     auditableChat.currentState = AuditableChatStates.IDLE;
                     break;

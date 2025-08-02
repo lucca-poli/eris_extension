@@ -1,8 +1,14 @@
 {
-  "name": "Hello Extensions",
-  "description": "Base Level Extension",
+  "name": "Secure chat for Whatsapp Web",
+  "description": "Enables secure conversations in Whatsapp Web. A secure conversation grants that what is said was not manipulated (e.g. deleted or edited messages).",
   "version": "1.0",
-  "permissions": ["storage", "scripting", "activeTab", "tabs", "commands"],
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab",
+    "tabs",
+    "commands"
+  ],
   "manifest_version": 3,
   "host_permissions": [
     "https://web.whatsapp.com/*"
@@ -12,28 +18,44 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://web.whatsapp.com/*"],
-      "js": ["js/front.js"]
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "js/front.js"
+      ]
     },
     {
-      "js": ["js/injected_api.js"],
-      "matches": ["https://web.whatsapp.com/*"],
+      "js": [
+        "js/injected_api.js"
+      ],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
       "world": "MAIN",
       "run_at": "document_start"
     }
   ],
   "externally_connectable": {
-    "matches": ["https://web.whatsapp.com/*"]
+    "matches": [
+      "https://web.whatsapp.com/*"
+    ]
   },
   "web_accessible_resources": [
     {
-      "matches": ["https://web.whatsapp.com/*"],
-      "resources": ["js/injected_api.js", "js/front.js" ]
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "resources": [
+        "js/injected_api.js",
+        "js/front.js"
+      ]
     }
   ],
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Chat Auditor Debug"
+    "default_popup": "default_popup.html",
+    "default_title": "Chat Auditor Debug Window.",
+    "default_icon": "icons/app_logo.png"
   },
   "commands": {
     "reload": {

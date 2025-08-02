@@ -14,11 +14,13 @@ export enum ActionOptions {
 };
 
 export enum AuditableControlMessage {
-    REQUEST = "Requesting auditable conversation.",
-    ACCEPT = "Auditable conversation accepted.",
-    DENY = "Auditable conversation denied.",
-    END = "Auditable conversation ended. Logs available in popup.",
-    ACK = "Confirmation ACK sent."
+    REQUEST = "[Control Message]\nRequesting secure conversation.",
+    CANCEL = "[Control Message]\nCancelling request of secure conversation.",
+    ACCEPT = "[Control Message]\nSecure conversation accepted.",
+    DENY = "[Control Message]\nSecure conversation denied.",
+    END = "[Control Message]\nSecure conversation ended. Logs available below.",
+    ABORT = "[Control Message]\nError in secure conversation, ending chat. Logs available below.",
+    ACK = "[Control Message]\nConfirmation ACK sent."
 };
 
 export enum AuditableChatStates {

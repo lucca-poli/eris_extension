@@ -14,7 +14,7 @@ export default {
         "injected_api": "./injected_api.ts",
         "front": "./front.ts",
         "background": "./background.ts",
-        "popup": "./popup.ts"
+        "default_popup": "./default_popup.ts"
     },
     output: {
         filename: "[name].js",

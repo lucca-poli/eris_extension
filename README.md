@@ -1,4 +1,4 @@
-# Erichain - Hashchains for messages integrity. Whatsapp implementation.
+# Secure chats - Hashchains for messages integrity. Whatsapp implementation.
 
 # How to use
 
@@ -10,7 +10,7 @@
 1. Clone this repo.
 2. Run ```npm install```.
 3. Run ```npm run build```. This should build the project in a /dist directory.
-4. In your target browser (e.g. Google Chrome or Brave), run the extension in development mode. [This tutorial](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world) should explain well enough, the target directory is the /dist generated in the previous step.
+4. In your target browser (e.g. Google Chrome or Brave), run the extension in development mode. [This tutorial](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked) should explain well enough, the target directory is the /dist generated in the previous step.
 
 If you want to tweak the code a bit, run ```npm run dev``` and every time you save it compiles a new /dist. To reload the new extension again in the browser press Ctrl+E, you can only reload this way after loading for the first time.
 
