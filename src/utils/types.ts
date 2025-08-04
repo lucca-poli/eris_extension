@@ -1,5 +1,3 @@
-import { z } from "zod/v4"
-
 export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
@@ -64,13 +62,22 @@ export type GetMessages = {
     options: GetMessagesOptions
 }
 
-export type AuditableMessage = {
+export type WhatsappMessage = {
     chatId: string;
     messageId?: string;
     content?: string;
     author: string;
-    metadata?: AuditableMessageMetadata;
+    metadata?: AuditableMetadata | AckMetadata;
     timestamp?: number;
+}
+
+interface BaseMetadata {
+    kind: MetadataOptions.AUDITABLE | MetadataOptions.ACK
+}
+
+export enum MetadataOptions {
+    AUDITABLE = "AUDITABLE",
+    ACK = "ACK"
 }
 
 export type AuditableMessageContent = {
@@ -78,8 +85,8 @@ export type AuditableMessageContent = {
     author: string;
 }
 
-export type GenerateAuditableMessage = {
-    auditableMessage: AuditableMessage;
+export type GenerateWhatsappMessage = {
+    whatsappMessage: WhatsappMessage;
     startingMessage: boolean;
 }
 
@@ -94,40 +101,17 @@ export type AuditableBlock = {
     commitedMessage: string
 }
 
-export type AuditableMessageMetadata = {
+export interface AuditableMetadata extends BaseMetadata {
+    kind: MetadataOptions.AUDITABLE;
     block: AuditableBlock;
     seed?: string;
 }
 
-export const AuditableBlockSchema = z.object({
-    hash: z.string(),
-    previousHash: z.string(),
-    counter: z.number(),
-    commitedMessage: z.string()
-});
-
-export const AuditableMessageMetadataSchema = z.object({
-    block: AuditableBlockSchema,
-    seed: z.string().optional()
-});
-
-export type AckMetadata = {
+export interface AckMetadata extends BaseMetadata {
+    kind: MetadataOptions.ACK;
     blockHash: string;
     counter: number;
-    sender: string;
-    receiver: string;
-    content: AuditableControlMessage;
 }
-
-export const AuditableChatOptionsSchema = z.enum(AuditableControlMessage);
-
-export const AckMetadataSchema = z.object({
-    blockHash: z.string(),
-    counter: z.number(),
-    sender: z.string(),
-    receiver: z.string(),
-    content: AuditableChatOptionsSchema
-});
 
 export type BlockState = {
     hash: string;

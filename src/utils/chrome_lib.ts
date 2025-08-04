@@ -1,4 +1,4 @@
-import { AckMetadata, AckMetadataSchema, AuditableMessage, AuditableMessageMetadata, GetMessagesOptions } from "./types";
+import { AckMetadata, WhatsappMessage, AuditableMetadata, GetMessagesOptions } from "./types";
 import WPP from "@wppconnect/wa-js"
 
 export function setInputbox(tabId: number, message: string) {
@@ -27,14 +27,10 @@ export async function getUserId(tabId: number) {
     return result?._serialized;
 }
 
-export async function sendTextMessage(tabId: number, chatMessage: AuditableMessage | AckMetadata) {
+export async function sendTextMessage(tabId: number, chatMessage: WhatsappMessage) {
     const { content } = chatMessage;
-    const ackMetada = AckMetadataSchema.safeParse(chatMessage);
-    const metadata = ackMetada.success ?
-        chatMessage as AckMetadata :
-        (chatMessage as AuditableMessage).metadata;
-    const chatId = ackMetada.success ? (chatMessage as AckMetadata).receiver : (chatMessage as AuditableMessage).chatId;
 
+    const metadata = chatMessage.metadata;
     const metadataString = metadata ? JSON.stringify(metadata) : "";
     if (typeof (content) !== "string") throw new Error("Content is undefined.");
 
@@ -51,7 +47,7 @@ export async function sendTextMessage(tabId: number, chatMessage: AuditableMessa
             });
             return WhatsappLayer.chat.sendTextMessage(chatId, content);
         },
-        args: [chatId, content as string, metadataString],
+        args: [chatMessage.chatId, content as string, metadataString],
         target: { tabId },
         world: 'MAIN',
     });
@@ -109,7 +105,7 @@ export async function getChatMessages(tabId: number, chatId: string, options?: G
                     .then((messages) => {
                         const auditableMessages = messages.map((message) => {
                             const auditableBlockString = message.description as string | undefined;
-                            const metadata: AuditableMessageMetadata = auditableBlockString ? JSON.parse(auditableBlockString) : undefined;
+                            const metadata: AuditableMetadata = auditableBlockString ? JSON.parse(auditableBlockString) : undefined;
                             return {
                                 content: message.body,
                                 author: message.from?._serialized,
@@ -117,7 +113,7 @@ export async function getChatMessages(tabId: number, chatId: string, options?: G
                                 metadata,
                                 messageId: message.id?._serialized,
                                 timestamp: message.t
-                            } as AuditableMessage;
+                            } as WhatsappMessage;
                         })
 
                         resolve(auditableMessages);
@@ -133,6 +129,6 @@ export async function getChatMessages(tabId: number, chatId: string, options?: G
         world: 'MAIN',
     });
 
-    return result as AuditableMessage[];
+    return result as WhatsappMessage[];
 }
 

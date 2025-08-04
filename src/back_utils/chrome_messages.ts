@@ -1,13 +1,14 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { AckMetadata, ActionOptions, AuditableChatMetadata, AuditableControlMessage, AuditableMessage, AuditableMessageContent, AuditableMessageMetadata, BlockState, GenerateAuditableMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "../utils/types";
+import { AckMetadata, ActionOptions, AuditableChatMetadata, WhatsappMessage, AuditableMessageContent, AuditableMetadata, BlockState, GenerateWhatsappMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage, MetadataOptions, AuditableControlMessage } from "../utils/types";
 import { AuditableChat } from "./auditable_chat";
 import { deleteMessage, getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
 
 // Fazer que função que processa ACK e função que processa mensagem auditavel e botar pra rodar uma ou outra dependendo do conteudo da mensagem auditavel
-async function verificationRoutine(chatId: string, auditableMessage: AuditableMessage, startingMessage: boolean) {
-    const auditableBlock = auditableMessage.metadata?.block;
-    if (!auditableBlock) throw new Error("Incoming auditable message has no block.");
+async function verificationRoutine(chatId: string, whatsappMessage: WhatsappMessage, startingMessage: boolean) {
+    const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
+    if (!metadataIsAuditable) throw new Error("Incoming auditable message has no block.");
+    const auditableBlock = (whatsappMessage.metadata as AuditableMetadata)?.block;
 
     // Verifying incomingMessage content
     const auditableState = (
@@ -36,8 +37,8 @@ async function verificationRoutine(chatId: string, auditableMessage: AuditableMe
             timestamp: new Date().toISOString().split('T')[0]
         } :
         {
-            content: auditableMessage.content as string,
-            author: auditableMessage.author
+            content: whatsappMessage.content as string,
+            author: whatsappMessage.author
         };
     const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, messageToProcess, auditableBlock.counter);
     if (commitedMessage !== auditableBlock.commitedMessage) throw new Error("Commited message created from block items is diferent from incoming commited message.")
@@ -49,17 +50,19 @@ export function setupChromeListeners(tabManager: TabManager) {
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
-        const { auditableMessage, startingMessage } = internalMessage.payload as GenerateAuditableMessage;
-        const { chatId } = auditableMessage;
+        const { whatsappMessage, startingMessage } = internalMessage.payload as GenerateWhatsappMessage;
+        const { chatId } = whatsappMessage;
+        const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
+        if (!metadataIsAuditable) throw new Error("Incoming message is not auditable.");
         const tabId = tabManager.getWhatsappTab().id as number;
-        const auditableBlock = auditableMessage.metadata?.block;
+        const auditableBlock = (whatsappMessage.metadata as AuditableMetadata)?.block;
         if (!auditableBlock) throw new Error("Incoming auditable message has no block.");
-        console.log("IncomingMessage: ", auditableMessage);
+        console.log("IncomingMessage: ", whatsappMessage);
 
         (async () => {
             const userId = await AuditableChatStateMachine.getUserId();
             if (!userId) throw new Error("No user id found.");
-            if (auditableMessage.author === userId) return;
+            if (whatsappMessage.author === userId) return;
 
             const auditableState = (
                 await AuditableChatStateMachine.getAuditableChat(chatId)
@@ -67,7 +70,7 @@ export function setupChromeListeners(tabManager: TabManager) {
             if (!auditableState) throw new Error("Auditable chat has no state.");
             const { counter } = auditableState;
 
-            await verificationRoutine(chatId, auditableMessage, startingMessage);
+            await verificationRoutine(chatId, whatsappMessage, startingMessage);
 
             // Updating internal state
             await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
@@ -75,14 +78,18 @@ export function setupChromeListeners(tabManager: TabManager) {
 
             // Send ACK
             const ackMetadata: AckMetadata = {
+                kind: MetadataOptions.ACK,
                 counter,
                 blockHash: auditableBlock.hash,
-                sender: userId,
-                receiver: chatId,
-                content: AuditableControlMessage.ACK
             };
+            const messageToSend: WhatsappMessage = {
+                author: userId,
+                chatId,
+                metadata: ackMetadata,
+                content: AuditableControlMessage.ACK
+            }
             console.log("Ack sent: ", ackMetadata);
-            const ackResponse = await sendTextMessage(tabId, ackMetadata);
+            const ackResponse = await sendTextMessage(tabId, messageToSend);
             if (!ackResponse) throw new Error("Problem in sending ACK.");
             await deleteMessage(tabId, chatId, ackResponse.id);
             console.log("Ack message deleted.")
@@ -95,8 +102,8 @@ export function setupChromeListeners(tabManager: TabManager) {
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.GENERATE_AND_SEND_BLOCK) return;
 
-        const { auditableMessage, startingMessage } = internalMessage.payload as GenerateAuditableMessage;
-        const chatId = auditableMessage.chatId;
+        const { whatsappMessage, startingMessage } = internalMessage.payload as GenerateWhatsappMessage;
+        const chatId = whatsappMessage.chatId;
         const tabId = tabManager.getWhatsappTab().id as number;
 
         (async () => {
@@ -118,15 +125,16 @@ export function setupChromeListeners(tabManager: TabManager) {
 
                 const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
 
-                auditableMessage.metadata = {
+                whatsappMessage.metadata = {
+                    kind: MetadataOptions.AUDITABLE,
                     block: await AuditableChat.generateBlock(commitedMessage, initChatState),
                     seed
-                } as AuditableMessageMetadata;
+                } as AuditableMetadata;
             } else {
                 // User envia mensagem normal com hashchain
                 const auditableContent: AuditableMessageContent = {
-                    content: auditableMessage.content as string,
-                    author: auditableMessage.author
+                    content: whatsappMessage.content as string,
+                    author: whatsappMessage.author
                 }
 
                 const auditableChat = await AuditableChatStateMachine.getAuditableChat(chatId);
@@ -142,15 +150,16 @@ export function setupChromeListeners(tabManager: TabManager) {
 
                 const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
 
-                auditableMessage.metadata = {
+                whatsappMessage.metadata = {
+                    kind: MetadataOptions.AUDITABLE,
                     block: await AuditableChat.generateBlock(commitedMessage, previousBlockState),
                     seed: undefined
-                } as AuditableMessageMetadata;
+                } as AuditableMetadata;
             }
 
-            await sendTextMessage(tabId, auditableMessage);
+            await sendTextMessage(tabId, whatsappMessage);
 
-            const updatedHash = auditableMessage.metadata.block.hash;
+            const updatedHash = whatsappMessage.metadata.block.hash;
             await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
         })();
     });
@@ -204,7 +213,7 @@ export function setupChromeListeners(tabManager: TabManager) {
 
         (async () => {
             const tabId = tabManager.getWhatsappTab().id as number;
-            const messageReturn = await sendTextMessage(tabId, internalMessage.payload as AuditableMessage);
+            const messageReturn = await sendTextMessage(tabId, internalMessage.payload as WhatsappMessage);
             // Cannot send complex objects
             sendResponse(messageReturn?.id);
         })();

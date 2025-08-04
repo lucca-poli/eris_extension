@@ -1,6 +1,6 @@
 import { finishingAuditableChatRoutine } from "./utils/finishing_routine";
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
-import { AckMetadata, AckMetadataSchema, ActionOptions, AuditableControlMessage, AuditableChatStates, AuditableMessage, GenerateAuditableMessage, InternalMessage } from "./utils/types";
+import { ActionOptions, AuditableControlMessage, AuditableChatStates, WhatsappMessage, GenerateWhatsappMessage, InternalMessage, MetadataOptions, AuditableMetadata } from "./utils/types";
 import { displayRequestWindow } from "./utils/request_popup";
 
 class DomProcessor {
@@ -56,7 +56,7 @@ class DomProcessor {
                         content: AuditableControlMessage.END,
                         chatId,
                         author: await AuditableChatStateMachine.getUserId()
-                    } as AuditableMessage
+                    } as WhatsappMessage
                 } as InternalMessage);
 
                 await finishingAuditableChatRoutine(
@@ -94,7 +94,7 @@ class DomProcessor {
                         content: AuditableControlMessage.CANCEL,
                         chatId,
                         author: await AuditableChatStateMachine.getUserId()
-                    } as AuditableMessage
+                    } as WhatsappMessage
                 } as InternalMessage);
             });
 
@@ -115,13 +115,13 @@ class DomProcessor {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
-                        auditableMessage: {
+                        whatsappMessage: {
                             chatId,
                             content: AuditableControlMessage.ACCEPT,
                             author: await AuditableChatStateMachine.getUserId(),
                         },
                         startingMessage: true,
-                    } as GenerateAuditableMessage,
+                    } as GenerateWhatsappMessage,
                 } as InternalMessage);
             });
 
@@ -132,7 +132,7 @@ class DomProcessor {
                         chatId,
                         content: AuditableControlMessage.DENY,
                         author: await AuditableChatStateMachine.getUserId()
-                    } as AuditableMessage
+                    } as WhatsappMessage
                 } as InternalMessage);
             });
 
@@ -222,13 +222,13 @@ class DomProcessor {
                 chrome.runtime.sendMessage({
                     action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
-                        auditableMessage: {
+                        whatsappMessage: {
                             content: auditableChatbox.textContent,
                             chatId,
                             author: await AuditableChatStateMachine.getUserId()
                         },
                         startingMessage: false,
-                    } as GenerateAuditableMessage,
+                    } as GenerateWhatsappMessage,
                 } as InternalMessage);
 
                 // @ts-ignore
@@ -278,54 +278,44 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const internalMessage: InternalMessage = event.data;
     if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
-    const incomingChatMessage = internalMessage.payload as AuditableMessage | AckMetadata;
-    const ackMetada = AckMetadataSchema.safeParse(incomingChatMessage);
-    if (ackMetada.success) {
-        // Manage AuditableChats state. I get the sender because all acks come from the receiver
-        const newState = await AuditableChatStateMachine.updateState(ackMetada.data.sender, ackMetada.data);
-        if (newState) currentAuditableChatId = ackMetada.data.sender;
+    const whatsappMessage = internalMessage.payload as WhatsappMessage;
+    const metadataIsAck = whatsappMessage.metadata?.kind === MetadataOptions.ACK;
+    const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
+    const { chatId } = whatsappMessage;
+    const oldState = await AuditableChatStateMachine.getAuditableChat(chatId);
+    console.log("oldState is: ", oldState);
 
-        // Update DOM
-        if (currentAuditableChatId && currentAuditableChatId === ackMetada.data.sender) {
-            const currentAuditableChat = await AuditableChatStateMachine.getAuditableChat(currentAuditableChatId);
-            if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
-            domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
-        }
-    } else {
-        const auditableMessage = incomingChatMessage as AuditableMessage;
-        const { chatId } = auditableMessage;
-        const oldState = await AuditableChatStateMachine.getAuditableChat(chatId);
-        console.log("oldState is: ", oldState);
+    // Manage AuditableChats state
+    const seed = metadataIsAuditable ?
+        (whatsappMessage.metadata as AuditableMetadata).seed || oldState?.internalAuditableChatVariables?.auditableChatSeed :
+        oldState?.internalAuditableChatVariables?.auditableChatSeed;
+    const newState = await AuditableChatStateMachine.updateState(chatId, whatsappMessage, {
+        seed,
+        messageId: whatsappMessage.messageId
+    });
+    console.log("newState is: ", newState);
+    if (newState) currentAuditableChatId = chatId;
+    console.log("newState really is: ", await AuditableChatStateMachine.getAuditableChat(chatId));
 
-        // Manage AuditableChats state
-        const newState = await AuditableChatStateMachine.updateState(chatId, auditableMessage, {
-            seed: auditableMessage.metadata?.seed || oldState?.internalAuditableChatVariables?.auditableChatSeed,
-            messageId: auditableMessage.messageId
-        });
-        console.log("newState is: ", newState);
-        if (newState) currentAuditableChatId = chatId;
-        console.log("newState really is: ", await AuditableChatStateMachine.getAuditableChat(chatId));
-
-        // Update DOM
-        if (currentAuditableChatId && currentAuditableChatId === chatId) {
-            const currentAuditableChat = await AuditableChatStateMachine.getAuditableChat(currentAuditableChatId);
-            if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
-            domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
-        }
-
-        // Se a mensagem for de um chat auditavel eu mando pro back processar
-        if (!auditableMessage.metadata) return;
-
-        const oldStateIsRequest = (oldState?.currentState === AuditableChatStates.REQUEST_SENT) || (oldState?.currentState === AuditableChatStates.REQUEST_RECEIVED);
-        const newStateIsAuditable = newState?.currentState === AuditableChatStates.ONGOING;
-        chrome.runtime.sendMessage({
-            action: ActionOptions.PROPAGATE_NEW_MESSAGE,
-            payload: {
-                auditableMessage: incomingChatMessage,
-                startingMessage: (oldStateIsRequest && newStateIsAuditable) ? true : false
-            } as GenerateAuditableMessage,
-        } as InternalMessage);
+    // Update DOM
+    if (currentAuditableChatId && currentAuditableChatId === chatId) {
+        const currentAuditableChat = await AuditableChatStateMachine.getAuditableChat(currentAuditableChatId);
+        if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
+        domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
     }
+
+    // Se a mensagem for de um chat auditavel eu mando pro back processar
+    if (!metadataIsAuditable) return;
+
+    const oldStateIsRequest = (oldState?.currentState === AuditableChatStates.REQUEST_SENT) || (oldState?.currentState === AuditableChatStates.REQUEST_RECEIVED);
+    const newStateIsAuditable = newState?.currentState === AuditableChatStates.ONGOING;
+    chrome.runtime.sendMessage({
+        action: ActionOptions.PROPAGATE_NEW_MESSAGE,
+        payload: {
+            whatsappMessage,
+            startingMessage: (oldStateIsRequest && newStateIsAuditable) ? true : false
+        } as GenerateWhatsappMessage,
+    } as InternalMessage);
 });
 
 window.addEventListener("message", async (event: MessageEvent) => {

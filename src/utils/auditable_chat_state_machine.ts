@@ -1,5 +1,5 @@
 import { finishingAuditableChatRoutine } from "./finishing_routine";
-import { AckMetadata, AckMetadataSchema, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, AuditableMessage, ChatState, AuditableMessageMetadataSchema, ActionOptions, InternalMessage } from "./types";
+import { AckMetadata, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, WhatsappMessage, ChatState, ActionOptions, InternalMessage, MetadataOptions } from "./types";
 
 export class AuditableChatStateMachine {
     private chatId: string;
@@ -12,21 +12,21 @@ export class AuditableChatStateMachine {
         this.currentState = currentState || AuditableChatStates.IDLE;
     };
 
-    static async updateState(chatId: string, incomingMessage: AuditableMessage | AckMetadata, options?: { messageId?: string, seed?: string }) {
+    static async updateState(chatId: string, incomingMessage: WhatsappMessage, options?: { messageId?: string, seed?: string }) {
         const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
         const auditableChat = new AuditableChatStateMachine(chatId, auditableState?.currentState);
 
         console.log("incomingMessage: ", incomingMessage);
-        const ackMetadata = AckMetadataSchema.safeParse(incomingMessage);
-        console.log("Is ack: ", ackMetadata.success);
-        const auditableMessageMetadata = AuditableMessageMetadataSchema.safeParse((incomingMessage as AuditableMessage).metadata);
-        console.log("Is auditableMessage: ", auditableMessageMetadata.success);
-        const messageIsOfExpectedType = auditableMessageMetadata.success || ackMetadata.success;
+        const metadataIsAck = incomingMessage.metadata?.kind === MetadataOptions.ACK;
+        console.log("Is ack: ", metadataIsAck);
+        const metadataIsAuditable = incomingMessage.metadata?.kind === MetadataOptions.AUDITABLE;
+        console.log("Is auditableMessage: ", metadataIsAuditable);
+        const messageIsOfExpectedType = metadataIsAuditable || metadataIsAck;
 
         switch (auditableChat.getCurrentState()) {
             case AuditableChatStates.IDLE:
                 if (incomingMessage.content === AuditableControlMessage.REQUEST) {
-                    const authorIsMe = (await AuditableChatStateMachine.getUserId()) === (incomingMessage as AuditableMessage).author;
+                    const authorIsMe = (await AuditableChatStateMachine.getUserId()) === incomingMessage.author;
                     if (authorIsMe) {
                         auditableChat.currentState = AuditableChatStates.REQUEST_SENT;
                     } else {
@@ -72,7 +72,7 @@ export class AuditableChatStateMachine {
                             content: AuditableControlMessage.ABORT,
                             chatId,
                             author: await AuditableChatStateMachine.getUserId()
-                        } as AuditableMessage
+                        } as WhatsappMessage
                     } as InternalMessage);
 
                     await finishingAuditableChatRoutine(
@@ -87,7 +87,7 @@ export class AuditableChatStateMachine {
                     break;
                 }
 
-                if (!ackMetadata.success && (incomingMessage as AuditableMessage).author !== chatId) auditableChat.currentState = AuditableChatStates.WAITING_ACK;
+                if (!metadataIsAck && incomingMessage.author !== chatId) auditableChat.currentState = AuditableChatStates.WAITING_ACK;
 
                 break;
             case AuditableChatStates.WAITING_ACK:
@@ -109,7 +109,7 @@ export class AuditableChatStateMachine {
                             content: AuditableControlMessage.ABORT,
                             chatId,
                             author: await AuditableChatStateMachine.getUserId()
-                        } as AuditableMessage
+                        } as WhatsappMessage
                     } as InternalMessage);
 
                     await finishingAuditableChatRoutine(
@@ -125,16 +125,18 @@ export class AuditableChatStateMachine {
                 }
 
                 const internalCounter = auditableState?.internalAuditableChatVariables?.counter;
-                if (!ackMetadata.success && (incomingMessage as AuditableMessage).author === (incomingMessage as AuditableMessage).chatId) throw new Error("Message arrived instead of ACK, should start AtD Block.");
-                console.log("Ack received!", ackMetadata.data);
+                const messageIsFromPartner = incomingMessage.author === incomingMessage.chatId;
+                if (!metadataIsAck && messageIsFromPartner) throw new Error("Message arrived instead of ACK, should start AtD Block.");
+                const ack = incomingMessage.metadata as AckMetadata;
+                console.log("Ack received!", ack);
                 console.log("internal state: ", auditableState?.internalAuditableChatVariables);
                 if (!internalCounter) throw new Error("No internal counter present.");
-                if (ackMetadata.success && ackMetadata.data.counter + 1 > internalCounter) throw new Error("Messages arrived out of order.");
+                if (ack.counter + 1 > internalCounter) throw new Error("Messages arrived out of order.");
                 // If the ack counter is less than the internal counter, should keep at WAITING_ACK state
 
                 // TODO: Include signature verifying in the future
 
-                if (ackMetadata.success && ackMetadata.data.counter + 1 === internalCounter) auditableChat.currentState = AuditableChatStates.ONGOING;
+                if (ack.counter + 1 === internalCounter) auditableChat.currentState = AuditableChatStates.ONGOING;
                 break;
             default:
                 throw new Error(`Unexpected State in conversation: ${auditableChat.currentState}`)

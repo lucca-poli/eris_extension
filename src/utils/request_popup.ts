@@ -1,5 +1,5 @@
 import { AuditableChatStateMachine } from "./auditable_chat_state_machine";
-import { ActionOptions, AuditableControlMessage, AuditableMessage, InternalMessage } from "./types";
+import { ActionOptions, AuditableControlMessage, WhatsappMessage, InternalMessage } from "./types";
 
 export async function displayRequestWindow(chatId: string) {
     const floatWindow = document.createElement('div');
@@ -136,7 +136,7 @@ export async function displayRequestWindow(chatId: string) {
                 content: AuditableControlMessage.REQUEST,
                 chatId,
                 author: await AuditableChatStateMachine.getUserId()
-            } as AuditableMessage
+            } as WhatsappMessage
         } as InternalMessage);
         console.log('Secure chat requested!');
         floatWindow.remove();

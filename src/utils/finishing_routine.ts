@@ -1,4 +1,4 @@
-import { ActionOptions, AuditableBlock, AuditableControlMessage, AuditableMessage, AuditableMessageMetadataSchema, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./types";
+import { ActionOptions, AuditableBlock, AuditableControlMessage, WhatsappMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage, MetadataOptions, AuditableMetadata } from "./types";
 
 export async function finishingAuditableChatRoutine(chatId: string, chatSeed: string, finishMessageId: string, scan_range: number) {
 
@@ -11,7 +11,7 @@ export async function finishingAuditableChatRoutine(chatId: string, chatSeed: st
             id: finishMessageId
         }
     }
-    const auditableMessagesRaw: AuditableMessage[] = await chrome.runtime.sendMessage({
+    const auditableMessagesRaw: WhatsappMessage[] = await chrome.runtime.sendMessage({
         action: ActionOptions.GET_MESSAGES,
         payload: getMessages
     } as InternalMessage);
@@ -19,19 +19,16 @@ export async function finishingAuditableChatRoutine(chatId: string, chatSeed: st
 
     // 1. Tirar as mensagens antes da inicial
     const firstStartingMessageIndex = auditableMessagesRaw.reverse().findIndex((auditableMessage) =>
-        (auditableMessage.content === AuditableControlMessage.ACCEPT && auditableMessage.metadata?.block.counter === 0)
+        (auditableMessage.content === AuditableControlMessage.ACCEPT && (auditableMessage.metadata as AuditableMetadata)?.block.counter === 0)
     );
     if (firstStartingMessageIndex === -1) throw new Error("Couldnt find starting message.");
     const currentAuditableMessages = auditableMessagesRaw.slice(0, firstStartingMessageIndex + 1).reverse();
     // 2. Tirar as mensagens de ACK
-    const auditableMessages = currentAuditableMessages.filter((auditableMessage) => {
-        const auditableMetadata = AuditableMessageMetadataSchema.safeParse(auditableMessage.metadata);
-        return auditableMetadata.success;
-    });
+    const auditableMessages = currentAuditableMessages.filter((auditableMessage) => auditableMessage.metadata?.kind === MetadataOptions.AUDITABLE);
 
     console.log("Auditable Messages: ", auditableMessages);
 
-    const publicLogs = auditableMessages.map((message) => message.metadata?.block as AuditableBlock);
+    const publicLogs = auditableMessages.map((message) => (message.metadata as AuditableMetadata)?.block as AuditableBlock);
     const publicJson = JSON.stringify(publicLogs);
 
     console.log("Public Logs: ", publicLogs);
