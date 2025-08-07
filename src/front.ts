@@ -279,7 +279,6 @@ window.addEventListener("message", async (event: MessageEvent) => {
     if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
     const whatsappMessage = internalMessage.payload as WhatsappMessage;
-    const metadataIsAck = whatsappMessage.metadata?.kind === MetadataOptions.ACK;
     const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
     const { chatId } = whatsappMessage;
     const oldState = await AuditableChatStateMachine.getAuditableChat(chatId);

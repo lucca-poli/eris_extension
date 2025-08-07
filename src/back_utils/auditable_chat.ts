@@ -1,5 +1,9 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { AuditableBlock, AuditableChatMetadata, AuditableMessageContent, BlockState, CommitArgs, HashArgs, PRFArgs, RandomSeedSalt } from "../utils/types";
+import { AgreeToDisagreeBlock, AuditableBlock, AuditableChatMetadata, AuditableMessageContent, BlockState, CommitArgs, HashArgs, PreviousHashes, PRFArgs, RandomSeedSalt } from "../utils/types";
+
+export async function assembleAgreeToDisagreeBlock(previousHashes: PreviousHashes, counter: number): Promise<AgreeToDisagreeBlock> {
+
+}
 
 export class AuditableChat {
     static STORAGE_KEY = 'chats';

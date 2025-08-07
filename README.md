@@ -21,4 +21,8 @@ If you want to test the 1x1 chat, try running 2 different browsers and loading t
 - Signatures
 
 # Bugs
-- Sending 2 messages too fast causes a bug.
+- consertar o bug de mensagens sequenciais muito rapidas
+- consertar o bug de se reiniciar a pagina dar BO
+- consertar o bug de poder aceitar uma requisição de uma conversa segura em outra
+- desabilitar conversa segura para conversas com o próprio
+- tratar mensagens sem hash ou com hash errado e encerrar conversa do lado de quem recebeu os hashes errados

@@ -18,7 +18,8 @@ export enum AuditableControlMessage {
     DENY = "[Control Message]\nSecure conversation denied.",
     END = "[Control Message]\nSecure conversation ended. Logs available below.",
     ABORT = "[Control Message]\nError in secure conversation, ending chat. Logs available below.",
-    ACK = "[Control Message]\nConfirmation ACK sent."
+    ACK = "[Control Message]\nConfirmation ACK sent.",
+    AGREE_TO_DISAGREE_ATTEMPT = "[Control Message]\nAttempting to resolve collision."
 };
 
 export enum AuditableChatStates {
@@ -43,6 +44,7 @@ export type InternalAuditableChatVariables = {
     auditableChatSeed: string;
     counter: number;
     previousHash: string;
+    agreeToDisagreeAtempt?: AgreeToDisagreeMetadata;
 }
 
 export type SendFileMessage = {
@@ -67,16 +69,17 @@ export type WhatsappMessage = {
     messageId?: string;
     content?: string;
     author: string;
-    metadata?: AuditableMetadata | AckMetadata;
+    metadata?: AuditableMetadata | AckMetadata | AgreeToDisagreeMetadata;
     timestamp?: number;
 }
 
 interface BaseMetadata {
-    kind: MetadataOptions.AUDITABLE | MetadataOptions.ACK
+    kind: MetadataOptions
 }
 
 export enum MetadataOptions {
     AUDITABLE = "AUDITABLE",
+    AGREE_TO_DISAGREE = "AGREE_TO_DISAGREE",
     ACK = "ACK"
 }
 
@@ -101,10 +104,27 @@ export type AuditableBlock = {
     commitedMessage: string
 }
 
+export type AgreeToDisagreeBlock = {
+    hash: string,
+    previousHashes: PreviousHashes,
+    counter: number,
+}
+
 export interface AuditableMetadata extends BaseMetadata {
     kind: MetadataOptions.AUDITABLE;
     block: AuditableBlock;
     seed?: string;
+}
+
+export type PreviousHashes = {
+    user: string;
+    counterpart: string;
+}
+
+export interface AgreeToDisagreeMetadata extends BaseMetadata {
+    kind: MetadataOptions.AGREE_TO_DISAGREE;
+    block: AgreeToDisagreeBlock;
+    disagreeRoot: WhatsappMessage;
 }
 
 export interface AckMetadata extends BaseMetadata {
