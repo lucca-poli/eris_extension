@@ -19,7 +19,8 @@ export enum AuditableControlMessage {
     END = "[Control Message]\nSecure conversation ended. Logs available below.",
     ABORT = "[Control Message]\nError in secure conversation, ending chat. Logs available below.",
     ACK = "[Control Message]\nConfirmation ACK sent.",
-    AGREE_TO_DISAGREE_ATTEMPT = "[Control Message]\nAttempting to resolve collision."
+    AGREE_TO_DISAGREE_ATTEMPT = "[Control Message]\nAttempting to resolve collision.",
+    AGREE_TO_DISAGREE_RESOLVE = "[Control Message]\nCollision resolved."
 };
 
 export enum AuditableChatStates {
@@ -104,9 +105,14 @@ export type AuditableBlock = {
     commitedMessage: string
 }
 
+export type PreviousBlockVerificationData = {
+    previousHash: string,
+    counter: number,
+}
+
 export type AgreeToDisagreeBlock = {
     hash: string,
-    previousHashes: PreviousHashes,
+    previousData: PreviousData,
     counter: number,
 }
 
@@ -116,9 +122,9 @@ export interface AuditableMetadata extends BaseMetadata {
     seed?: string;
 }
 
-export type PreviousHashes = {
-    user: string;
-    counterpart: string;
+export type PreviousData = {
+    user: PreviousBlockVerificationData;
+    counterpart: PreviousBlockVerificationData;
 }
 
 export interface AgreeToDisagreeMetadata extends BaseMetadata {

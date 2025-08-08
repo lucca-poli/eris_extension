@@ -1,8 +1,8 @@
-import { AuditableBlock, AuditableChatMetadata, AuditableMessageContent, AuditableMetadata, MetadataOptions, WhatsappMessage } from "../utils/types";
+import { AuditableChatMetadata, AuditableMessageContent, AuditableMetadata, MetadataOptions, PreviousBlockVerificationData, WhatsappMessage } from "../utils/types";
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
 import { AuditableChat } from "../back_utils/auditable_chat";
 
-export async function verificationRoutine(chatId: string, whatsappMessage: WhatsappMessage, startingMessage: boolean, previousAuditableBlock?: AuditableBlock) {
+export async function verificationRoutine(chatId: string, whatsappMessage: WhatsappMessage, startingMessage: boolean, previousAuditableBlock?: PreviousBlockVerificationData) {
     const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
     if (!metadataIsAuditable) throw new Error("Incoming auditable message has no block.");
     const auditableBlock = (whatsappMessage.metadata as AuditableMetadata)?.block;

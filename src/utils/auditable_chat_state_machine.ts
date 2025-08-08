@@ -1,7 +1,7 @@
-import { assembleAgreeToDisagreeBlock } from "back_utils/auditable_chat";
+import { assembleAgreeToDisagreeBlock } from "../back_utils/auditable_chat";
 import { verificationRoutine } from "../core_utils/verify";
 import { finishingAuditableChatRoutine } from "./finishing_routine";
-import { AckMetadata, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, WhatsappMessage, ChatState, ActionOptions, InternalMessage, MetadataOptions, AuditableMetadata, GetMessages, PreviousHashes, AgreeToDisagreeMetadata } from "./types";
+import { AckMetadata, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, WhatsappMessage, ChatState, ActionOptions, InternalMessage, MetadataOptions, AuditableMetadata, GetMessages, PreviousHashes, AgreeToDisagreeMetadata, PreviousBlockVerificationData, PreviousData } from "./types";
 
 // Returns WhatsappMessage[] with the last received message being the first element
 async function fetchLastMessages(chatId: string, count: number) {
@@ -200,14 +200,22 @@ export class AuditableChatStateMachine {
                     const userId = await AuditableChatStateMachine.getUserId();
                     if (!userId) throw new Error("User number not found");
                     const lastUserMessage = collidedMessages.filter((auditableMessage) => auditableMessage.author === userId);
+                    const lastUserData: PreviousBlockVerificationData = {
+                        previousHash: (lastUserMessage[0].metadata as AuditableMetadata).block.hash,
+                        counter: (lastUserMessage[0].metadata as AuditableMetadata).block.counter,
+                    };
                     const lastCounterpartMessage = collidedMessages.filter((auditableMessage) => auditableMessage.author !== userId);
+                    const lastCounterpartData: PreviousBlockVerificationData = {
+                        previousHash: (lastCounterpartMessage[0].metadata as AuditableMetadata).block.hash,
+                        counter: (lastCounterpartMessage[0].metadata as AuditableMetadata).block.counter,
+                    };
                     if (lastUserMessage.length === 0 || lastCounterpartMessage.length === 0) throw new Error("Both parties should have at least one message.");
-                    const previousHashes: PreviousHashes = {
-                        user: (lastUserMessage[0].metadata as AuditableMetadata).block.hash,
-                        counterpart: (lastCounterpartMessage[0].metadata as AuditableMetadata).block.hash
+                    const previousData: PreviousData = {
+                        user: lastUserData,
+                        counterpart: lastCounterpartData
                     };
                     const newCounter = (collisionMessage.metadata as AuditableMetadata).block.counter + collidedMessages.length;
-                    const agreeToDisagreeBlock = await assembleAgreeToDisagreeBlock(previousHashes, newCounter);
+                    const agreeToDisagreeBlock = await assembleAgreeToDisagreeBlock(previousData, newCounter);
                     const agreeToDisagreeMetadata: AgreeToDisagreeMetadata = {
                         kind: MetadataOptions.AGREE_TO_DISAGREE,
                         block: agreeToDisagreeBlock,
@@ -229,14 +237,51 @@ export class AuditableChatStateMachine {
                 }
                 if (agreeToDisagreeAtempt) {
                     if (incomingMessage.metadata === agreeToDisagreeAtempt) {
-                        // 1. Delete AtD attempt from memory
-                        // 2. Change state to ONGOING
-                        // 3. Update counter and previous_hash on memory based on conclusion AtD Block
+                        // 1. Update counter and previous_hash on memory based on conclusion AtD Block
+                        if (!internalVariables) throw new Error("No internal variables found.");
+                        if (!internalVariables.agreeToDisagreeAtempt) throw new Error("No AtD attempt found.");
+                        internalVariables.counter = internalVariables.agreeToDisagreeAtempt.block.counter + 1;
+                        internalVariables.previousHash = internalVariables.agreeToDisagreeAtempt.block.hash;
+                        // 2. Delete AtD attempt from memory
+                        delete internalVariables.agreeToDisagreeAtempt;
+                        // 3. Change state to ONGOING
+                        auditableChat.currentState = AuditableChatStates.ONGOING;
+                        // 4. Send confirmation in chat
+                        await chrome.runtime.sendMessage({
+                            action: ActionOptions.SEND_TEXT_MESSAGE,
+                            payload: {
+                                content: AuditableControlMessage.AGREE_TO_DISAGREE_RESOLVE,
+                                chatId,
+                                author: await AuditableChatStateMachine.getUserId(),
+                                metadata: internalVariables.agreeToDisagreeAtempt
+                            } as WhatsappMessage
+                        } as InternalMessage);
                     } else if (metadataIsAuditable) {
                         // 1. Verify coeherence based on previous hashes and counters in the AtD block
-                        // 2. Update AtD block based on message received
-                        // 3. Store it on memory
-                        // 4. Send this AtD attempt on chat
+                        if (!internalVariables?.agreeToDisagreeAtempt) throw new Error("No AtD attempt found.");
+                        // Assuming that if a new block arrives it's for sure from the counterpart
+                        const previousData: PreviousBlockVerificationData = {
+                            previousHash: internalVariables.agreeToDisagreeAtempt.block.previousData.counterpart.previousHash,
+                            counter: internalVariables.agreeToDisagreeAtempt.block.previousData.counterpart.counter
+                        }
+                        await verificationRoutine(chatId, incomingMessage, false, previousData);
+                        // 2. Update AtD block based on message received and store it on memory
+                        internalVariables.agreeToDisagreeAtempt.block.counter += 1;
+                        // internalVariables.agreeToDisagreeAtempt.block.hash = generateAgreeToDisagreeHash();
+                        internalVariables.agreeToDisagreeAtempt.block.previousData.counterpart = {
+                            previousHash: (incomingMessage.metadata as AuditableMetadata).block.hash,
+                            counter: (incomingMessage.metadata as AuditableMetadata).block.counter
+                        };
+                        // 3. Send this AtD attempt on chat
+                        await chrome.runtime.sendMessage({
+                            action: ActionOptions.SEND_TEXT_MESSAGE,
+                            payload: {
+                                content: AuditableControlMessage.AGREE_TO_DISAGREE_ATTEMPT,
+                                chatId,
+                                author: await AuditableChatStateMachine.getUserId(),
+                                metadata: internalVariables.agreeToDisagreeAtempt
+                            } as WhatsappMessage
+                        } as InternalMessage);
                     } else {
                         break;
                     }

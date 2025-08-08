@@ -1,7 +1,7 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { AgreeToDisagreeBlock, AuditableBlock, AuditableChatMetadata, AuditableMessageContent, BlockState, CommitArgs, HashArgs, PreviousHashes, PRFArgs, RandomSeedSalt } from "../utils/types";
+import { AgreeToDisagreeBlock, AuditableBlock, AuditableChatMetadata, AuditableMessageContent, BlockState, CommitArgs, HashArgs, PreviousData, PRFArgs, RandomSeedSalt } from "../utils/types";
 
-export async function assembleAgreeToDisagreeBlock(previousHashes: PreviousHashes, counter: number): Promise<AgreeToDisagreeBlock> {
+export async function assembleAgreeToDisagreeBlock(previousHashes: PreviousData, counter: number): Promise<AgreeToDisagreeBlock> {
 
 }
 
