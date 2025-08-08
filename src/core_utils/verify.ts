@@ -1,6 +1,6 @@
 import { AuditableChatMetadata, AuditableMessageContent, AuditableMetadata, MetadataOptions, PreviousBlockVerificationData, WhatsappMessage } from "../utils/types";
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { AuditableChat } from "../back_utils/auditable_chat";
+import { generateBlock, generateCommitedMessage } from "../back_utils/auditable_chat";
 
 export async function verificationRoutine(chatId: string, whatsappMessage: WhatsappMessage, startingMessage: boolean, previousAuditableBlock?: PreviousBlockVerificationData) {
     const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
@@ -20,7 +20,7 @@ export async function verificationRoutine(chatId: string, whatsappMessage: Whats
     if (auditableBlock.counter > counter) throw new Error("Incoming message out of order.");
 
     // Verifying hashes
-    const generatedBlock = await AuditableChat.generateBlock(auditableBlock.commitedMessage, {
+    const generatedBlock = await generateBlock(auditableBlock.commitedMessage, {
         counter: auditableBlock.counter,
         hash: auditableBlock.previousHash
     });
@@ -37,6 +37,6 @@ export async function verificationRoutine(chatId: string, whatsappMessage: Whats
             content: whatsappMessage.content as string,
             author: whatsappMessage.author
         };
-    const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, messageToProcess, auditableBlock.counter);
+    const commitedMessage = await generateCommitedMessage(chatId, messageToProcess, auditableBlock.counter);
     if (commitedMessage !== auditableBlock.commitedMessage) throw new Error("Commited message created from block items is diferent from incoming commited message.")
 }

@@ -170,3 +170,8 @@ export type HashArgs = {
     counter: number;
     commitedMessage: string;
 }
+
+export type AgreeToDisagreeHashArgs = {
+    previousData: PreviousData;
+    counter: number;
+}

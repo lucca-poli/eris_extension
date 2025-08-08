@@ -1,7 +1,7 @@
 import { assembleAgreeToDisagreeBlock } from "../back_utils/auditable_chat";
 import { verificationRoutine } from "../core_utils/verify";
 import { finishingAuditableChatRoutine } from "./finishing_routine";
-import { AckMetadata, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, WhatsappMessage, ChatState, ActionOptions, InternalMessage, MetadataOptions, AuditableMetadata, GetMessages, PreviousHashes, AgreeToDisagreeMetadata, PreviousBlockVerificationData, PreviousData } from "./types";
+import { AckMetadata, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, WhatsappMessage, ChatState, ActionOptions, InternalMessage, MetadataOptions, AuditableMetadata, GetMessages, AgreeToDisagreeMetadata, PreviousBlockVerificationData, PreviousData } from "./types";
 
 // Returns WhatsappMessage[] with the last received message being the first element
 async function fetchLastMessages(chatId: string, count: number) {

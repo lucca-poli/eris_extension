@@ -1,6 +1,21 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { AckMetadata, ActionOptions, AuditableChatMetadata, WhatsappMessage, AuditableMessageContent, AuditableMetadata, BlockState, GenerateWhatsappMessage, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage, MetadataOptions, AuditableControlMessage } from "../utils/types";
-import { AuditableChat } from "./auditable_chat";
+import {
+    AckMetadata,
+    ActionOptions,
+    AuditableChatMetadata,
+    WhatsappMessage,
+    AuditableMessageContent,
+    AuditableMetadata,
+    BlockState,
+    GenerateWhatsappMessage,
+    GetCommitedKeys,
+    GetMessages,
+    InternalMessage,
+    SendFileMessage,
+    MetadataOptions,
+    AuditableControlMessage
+} from "../utils/types";
+import { generateAuditableSeed, generateBlock, generateCommitedMessage, prf } from "./auditable_chat";
 import { deleteMessage, getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
 import { verificationRoutine } from "../core_utils/verify";
@@ -70,7 +85,7 @@ export function setupChromeListeners(tabManager: TabManager) {
         (async () => {
             if (startingMessage) {
                 // User envia mensagem de aceite
-                const seed = await AuditableChat.generateAuditableSeed(chatId)
+                const seed = await generateAuditableSeed(chatId)
                 console.log("Seed created: ", seed)
                 const auditableState = await AuditableChatStateMachine.setAuditableChatStart(chatId, seed);
                 if (!auditableState.internalAuditableChatVariables) throw new Error("Chat has no state");
@@ -84,11 +99,11 @@ export function setupChromeListeners(tabManager: TabManager) {
                     counter: auditableState.internalAuditableChatVariables?.counter
                 }
 
-                const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
+                const commitedMessage = await generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
 
                 whatsappMessage.metadata = {
                     kind: MetadataOptions.AUDITABLE,
-                    block: await AuditableChat.generateBlock(commitedMessage, initChatState),
+                    block: await generateBlock(commitedMessage, initChatState),
                     seed
                 } as AuditableMetadata;
             } else {
@@ -109,11 +124,11 @@ export function setupChromeListeners(tabManager: TabManager) {
                     counter: internalState.counter
                 };
 
-                const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
+                const commitedMessage = await generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
 
                 whatsappMessage.metadata = {
                     kind: MetadataOptions.AUDITABLE,
-                    block: await AuditableChat.generateBlock(commitedMessage, previousBlockState),
+                    block: await generateBlock(commitedMessage, previousBlockState),
                     seed: undefined
                 } as AuditableMetadata;
             }
@@ -156,7 +171,7 @@ export function setupChromeListeners(tabManager: TabManager) {
 
         (async () => {
             const keys = counters.map(async (counter) => {
-                return AuditableChat.prf({
+                return prf({
                     seed,
                     counter
                 })
