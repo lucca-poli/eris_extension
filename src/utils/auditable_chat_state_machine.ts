@@ -140,8 +140,6 @@ export class AuditableChatStateMachine {
                 throw new Error(`Unexpected State in conversation: ${auditableChat.currentState}`)
         }
 
-        const stateChanged = auditableState?.currentState !== auditableChat.getCurrentState();
-        if (!stateChanged) return undefined;
         const newChatState: ChatState = {
             internalAuditableChatVariables: (await AuditableChatStateMachine.getAuditableChat(chatId))?.internalAuditableChatVariables,
             currentState: auditableChat.getCurrentState(),

@@ -21,4 +21,3 @@ If you want to test the 1x1 chat, try running 2 different browsers and loading t
 - Signatures
 
 # Bugs
-- Sending 2 messages too fast causes a bug.

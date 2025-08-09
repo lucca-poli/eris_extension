@@ -112,7 +112,7 @@ class DomProcessor {
             acceptAuditableButton.addEventListener("click", async () => {
                 this.setupChatbox(chatId);
 
-                chrome.runtime.sendMessage({
+                await chrome.runtime.sendMessage({
                     action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
                         auditableMessage: {
@@ -303,11 +303,10 @@ window.addEventListener("message", async (event: MessageEvent) => {
             messageId: auditableMessage.messageId
         });
         console.log("newState is: ", newState);
-        if (newState) currentAuditableChatId = chatId;
         console.log("newState really is: ", await AuditableChatStateMachine.getAuditableChat(chatId));
 
         // Update DOM
-        if (currentAuditableChatId && currentAuditableChatId === chatId) {
+        if (currentAuditableChatId === chatId) {
             const currentAuditableChat = await AuditableChatStateMachine.getAuditableChat(currentAuditableChatId);
             if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
             domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);

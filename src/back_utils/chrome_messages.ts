@@ -92,67 +92,67 @@ export function setupChromeListeners(tabManager: TabManager) {
     });
 
     // Send message routine
-    chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
+    chrome.runtime.onMessage.addListener(async (internalMessage: InternalMessage) => {
         if (internalMessage.action !== ActionOptions.GENERATE_AND_SEND_BLOCK) return;
 
         const { auditableMessage, startingMessage } = internalMessage.payload as GenerateAuditableMessage;
         const chatId = auditableMessage.chatId;
         const tabId = tabManager.getWhatsappTab().id as number;
 
-        (async () => {
-            if (startingMessage) {
-                // User envia mensagem de aceite
-                const seed = await AuditableChat.generateAuditableSeed(chatId)
-                console.log("Seed created: ", seed)
-                const auditableState = await AuditableChatStateMachine.setAuditableChatStart(chatId, seed);
-                if (!auditableState.internalAuditableChatVariables) throw new Error("Chat has no state");
+        if (startingMessage) {
+            // User envia mensagem de aceite
+            const seed = await AuditableChat.generateAuditableSeed(chatId)
+            console.log("Seed created: ", seed)
+            const auditableState = await AuditableChatStateMachine.setAuditableChatStart(chatId, seed);
+            if (!auditableState.internalAuditableChatVariables) throw new Error("Chat has no state");
 
-                const auditableMetadata: AuditableChatMetadata = {
-                    timestamp: new Date().toISOString().split('T')[0]
-                }
-
-                const initChatState: BlockState = {
-                    hash: auditableState.internalAuditableChatVariables?.previousHash,
-                    counter: auditableState.internalAuditableChatVariables?.counter
-                }
-
-                const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
-
-                auditableMessage.metadata = {
-                    block: await AuditableChat.generateBlock(commitedMessage, initChatState),
-                    seed
-                } as AuditableMessageMetadata;
-            } else {
-                // User envia mensagem normal com hashchain
-                const auditableContent: AuditableMessageContent = {
-                    content: auditableMessage.content as string,
-                    author: auditableMessage.author
-                }
-
-                const auditableChat = await AuditableChatStateMachine.getAuditableChat(chatId);
-                console.log("Current State before sending message: ", auditableChat);
-                if (!auditableChat) throw new Error("No auditable chat found.");
-                const internalState = auditableChat.internalAuditableChatVariables;
-                if (!internalState) throw new Error("No chat reference found.");
-
-                const previousBlockState: BlockState = {
-                    hash: internalState.previousHash,
-                    counter: internalState.counter
-                };
-
-                const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
-
-                auditableMessage.metadata = {
-                    block: await AuditableChat.generateBlock(commitedMessage, previousBlockState),
-                    seed: undefined
-                } as AuditableMessageMetadata;
+            const auditableMetadata: AuditableChatMetadata = {
+                timestamp: new Date().toISOString().split('T')[0]
             }
 
-            await sendTextMessage(tabId, auditableMessage);
+            const initChatState: BlockState = {
+                hash: auditableState.internalAuditableChatVariables?.previousHash,
+                counter: auditableState.internalAuditableChatVariables?.counter
+            }
 
-            const updatedHash = auditableMessage.metadata.block.hash;
-            await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
-        })();
+            const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
+
+            auditableMessage.metadata = {
+                block: await AuditableChat.generateBlock(commitedMessage, initChatState),
+                seed
+            } as AuditableMessageMetadata;
+        } else {
+            // User envia mensagem normal com hashchain
+            const auditableContent: AuditableMessageContent = {
+                content: auditableMessage.content as string,
+                author: auditableMessage.author
+            }
+
+            const auditableChat = await AuditableChatStateMachine.getAuditableChat(chatId);
+            console.log("Current State before sending message: ", auditableChat);
+            if (!auditableChat) throw new Error("No auditable chat found.");
+            const internalState = auditableChat.internalAuditableChatVariables;
+            if (!internalState) throw new Error("No chat reference found.");
+
+            const previousBlockState: BlockState = {
+                hash: internalState.previousHash,
+                counter: internalState.counter
+            };
+
+            const commitedMessage = await AuditableChat.generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
+
+            auditableMessage.metadata = {
+                block: await AuditableChat.generateBlock(commitedMessage, previousBlockState),
+                seed: undefined
+            } as AuditableMessageMetadata;
+        }
+
+        const updatedHash = auditableMessage.metadata.block.hash;
+        await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
+
+        console.log("Trying to send message.");
+        const returnStatus = await sendTextMessage(tabId, auditableMessage);
+        console.log("Message sent: ", returnStatus);
     });
 
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
