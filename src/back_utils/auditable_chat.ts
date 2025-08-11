@@ -1,140 +1,163 @@
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { AuditableBlock, AuditableChatMetadata, AuditableMessageContent, BlockState, CommitArgs, HashArgs, PRFArgs, RandomSeedSalt } from "../utils/types";
+import {
+    AgreeToDisagreeBlock,
+    AgreeToDisagreeHashArgs,
+    AuditableBlock,
+    AuditableChatMetadata,
+    AuditableMessageContent,
+    BlockState,
+    CommitArgs,
+    HashArgs,
+    PreviousData,
+    PRFArgs,
+    RandomSeedSalt
+} from "../utils/types";
 
-export class AuditableChat {
-    static STORAGE_KEY = 'chats';
+export async function assembleAgreeToDisagreeBlock(previousData: PreviousData, counter: number): Promise<AgreeToDisagreeBlock> {
+    const sortedEntries = Array.from(previousData.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const sortedObject = Object.fromEntries(sortedEntries);
 
-    constructor() {
-        console.log("Non expected call to constructor.")
+    const hashArgs: AgreeToDisagreeHashArgs = {
+        previousData: sortedObject,
+        counter,
     };
+    console.log("hashArgs: ", hashArgs);
+    const newHash = await hashFunction(hashArgs);
 
-    static async generateAuditableSeed(chatId: string): Promise<string> {
-        const userId = await AuditableChatStateMachine.getUserId();
-        if (!userId) throw new Error("No userId found.");
+    return {
+        hash: newHash,
+        previousData: sortedObject,
+        counter,
+    } as AgreeToDisagreeBlock;
+}
 
-        const seedSaltObject: RandomSeedSalt = {
-            currentTime: Date.now(),
-            chatId,
-            userId,
-        };
-        const seedSalt = JSON.stringify(seedSaltObject);
+export const STORAGE_KEY = 'chats';
 
-        const encoder = new TextEncoder();
-        const data = encoder.encode(seedSalt);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = new Uint8Array(hashBuffer);
+export async function generateAuditableSeed(chatId: string): Promise<string> {
+    const userId = await AuditableChatStateMachine.getUserId();
+    if (!userId) throw new Error("No userId found.");
 
-        // Convert to a number seed (32-bit)
-        const randomNumber = (hashArray[0] << 24) | (hashArray[1] << 16) | (hashArray[2] << 8) | hashArray[3];
-        const length = 8;
-        const seed = randomNumber.toString(16).padStart(length, '0');
-        return (seed.charAt(0) === '-') ? seed.slice(1) : seed; // Convert to unsigned 32-bit integer
-    }
+    const seedSaltObject: RandomSeedSalt = {
+        currentTime: Date.now(),
+        chatId,
+        userId,
+    };
+    const seedSalt = JSON.stringify(seedSaltObject);
 
-    static async generateCommitedMessage(chatId: string, messageToProcess: AuditableMessageContent | AuditableChatMetadata, counter: number) {
-        const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
-        if (!auditableState?.internalAuditableChatVariables) throw new Error("Internal state for this chat ended earlier than expected.");
-        const seed = auditableState.internalAuditableChatVariables?.auditableChatSeed;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(seedSalt);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = new Uint8Array(hashBuffer);
 
-        const commitedKeyArgs: PRFArgs = {
-            seed,
-            counter
-        };
-        console.log("commitedKeyArgs: ", commitedKeyArgs);
-        const commitedKey = await AuditableChat.prf(commitedKeyArgs);
+    // Convert to a number seed (32-bit)
+    const randomNumber = (hashArray[0] << 24) | (hashArray[1] << 16) | (hashArray[2] << 8) | hashArray[3];
+    const length = 8;
+    const seed = randomNumber.toString(16).padStart(length, '0');
+    return (seed.charAt(0) === '-') ? seed.slice(1) : seed; // Convert to unsigned 32-bit integer
+}
 
-        const commitedMessageArgs: CommitArgs = {
-            commitedKey,
-            message: JSON.stringify(messageToProcess)
-        };
-        console.log("commitedMessageArgs: ", commitedMessageArgs);
-        const commitedMessage = await AuditableChat.#commitFunction(commitedMessageArgs);
+export async function generateCommitedMessage(chatId: string, messageToProcess: AuditableMessageContent | AuditableChatMetadata, counter: number) {
+    const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
+    if (!auditableState?.internalAuditableChatVariables) throw new Error("Internal state for this chat ended earlier than expected.");
+    const seed = auditableState.internalAuditableChatVariables?.auditableChatSeed;
 
-        return commitedMessage
-    }
+    const commitedKeyArgs: PRFArgs = {
+        seed,
+        counter
+    };
+    console.log("commitedKeyArgs: ", commitedKeyArgs);
+    const commitedKey = await prf(commitedKeyArgs);
 
-    static async generateBlock(commitedMessage: string, previousBlockState: BlockState) {
-        const { hash, counter } = previousBlockState;
+    const commitedMessageArgs: CommitArgs = {
+        commitedKey,
+        message: JSON.stringify(messageToProcess)
+    };
+    console.log("commitedMessageArgs: ", commitedMessageArgs);
+    const commitedMessage = await commitFunction(commitedMessageArgs);
 
-        const hashArgs: HashArgs = {
-            previousHash: hash,
-            counter,
-            commitedMessage
-        };
-        console.log("hashArgs: ", hashArgs);
-        const newHash = await AuditableChat.#hashFunction(hashArgs);
+    return commitedMessage
+}
 
-        return {
-            hash: newHash,
-            previousHash: hash,
-            counter,
-            commitedMessage
-        } as AuditableBlock;
-    }
+export async function generateBlock(commitedMessage: string, previousBlockState: BlockState) {
+    const { hash, counter } = previousBlockState;
 
-    static async #commitFunction(args: CommitArgs) {
-        const serializedData = JSON.stringify(args);
+    const hashArgs: HashArgs = {
+        previousHash: hash,
+        counter,
+        commitedMessage
+    };
+    const newHash = await hashFunction(hashArgs);
 
-        // 1. Encode the string as UTF-8
-        const encoder = new TextEncoder();
-        const data = encoder.encode(serializedData);
+    return {
+        hash: newHash,
+        previousHash: hash,
+        counter,
+        commitedMessage
+    } as AuditableBlock;
+}
 
-        // 2. Hash it
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+export async function commitFunction(args: CommitArgs) {
+    const serializedData = JSON.stringify(args);
 
-        // 3. Convert ArrayBuffer to hex string
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
+    // 1. Encode the string as UTF-8
+    const encoder = new TextEncoder();
+    const data = encoder.encode(serializedData);
 
-        return hashHex;
-    }
+    // 2. Hash it
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
 
-    static async #hashFunction(args: HashArgs) {
-        const serializedData = JSON.stringify(args);
+    // 3. Convert ArrayBuffer to hex string
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
 
-        // 1. Encode the string as UTF-8
-        const encoder = new TextEncoder();
-        const data = encoder.encode(serializedData);
+    return hashHex;
+}
 
-        // 2. Hash it
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+export async function hashFunction(args: HashArgs | AgreeToDisagreeHashArgs) {
+    const serializedData = JSON.stringify(args);
 
-        // 3. Convert ArrayBuffer to hex string
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
+    // 1. Encode the string as UTF-8
+    const encoder = new TextEncoder();
+    const data = encoder.encode(serializedData);
 
-        return hashHex;
-    }
+    // 2. Hash it
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
 
-    static async prf(args: PRFArgs): Promise<string> {
-        const { seed, counter } = args;
+    // 3. Convert ArrayBuffer to hex string
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
 
-        const enc = new TextEncoder();
+    return hashHex;
+}
 
-        // Import the key into a CryptoKey object
-        const cryptoKey = await crypto.subtle.importKey(
-            'raw',
-            enc.encode(seed),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['sign']
-        );
+export async function prf(args: PRFArgs): Promise<string> {
+    const { seed, counter } = args;
 
-        // Run HMAC
-        const signature = await crypto.subtle.sign(
-            'HMAC',
-            cryptoKey,
-            enc.encode(String(counter))
-        );
+    const enc = new TextEncoder();
 
-        // Convert ArrayBuffer to hex
-        return Array.from(new Uint8Array(signature))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-    }
+    // Import the key into a CryptoKey object
+    const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        enc.encode(seed),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+    );
+
+    // Run HMAC
+    const signature = await crypto.subtle.sign(
+        'HMAC',
+        cryptoKey,
+        enc.encode(String(counter))
+    );
+
+    // Convert ArrayBuffer to hex
+    return Array.from(new Uint8Array(signature))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
 }
 

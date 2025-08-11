@@ -1,37 +1,69 @@
-import { ActionOptions, AuditableBlock, AuditableControlMessage, AuditableMessage, AuditableMessageMetadataSchema, GetCommitedKeys, GetMessages, InternalMessage, SendFileMessage } from "./types";
+import { fetchLastMessagesFront } from "../core_utils/data_aquisition";
+import { ActionOptions, AuditableBlock, AuditableControlMessage, WhatsappMessage, GetCommitedKeys, InternalMessage, SendFileMessage, MetadataOptions, AuditableMetadata, GetMessagesOptions, AgreeToDisagreeMetadata } from "./types";
 
-export async function finishingAuditableChatRoutine(chatId: string, chatSeed: string, finishMessageId: string, scan_range: number) {
+async function getAuditableChat(chatId: string, chatSeed: string, finishMessageId: string, initialGuess: number): Promise<WhatsappMessage[]> {
+    let numMessagesToSearch = initialGuess;
+    let whatsappMessages: WhatsappMessage[] = [];
+    let initialAuditableMessage: WhatsappMessage | undefined = undefined;
 
-    const getMessages: GetMessages = {
-        chatId,
-        options: {
-            // Getting double the amount to avoid problems with acks
-            count: scan_range,
-            direction: "before",
-            id: finishMessageId
-        }
+    // Search until finding the initial message
+    while (!initialAuditableMessage) {
+        const getMessagesOptions: GetMessagesOptions = {
+            count: numMessagesToSearch,
+            id: finishMessageId,
+            direction: "before"
+        };
+        whatsappMessages = await fetchLastMessagesFront(chatId, getMessagesOptions);
+
+        const agreeToDisagreeResolvesLenght: number = whatsappMessages
+            .filter((whatsappMessage) => whatsappMessage.content === AuditableControlMessage.AGREE_TO_DISAGREE_RESOLVE && whatsappMessage.metadata?.kind === MetadataOptions.AGREE_TO_DISAGREE)
+            .map((whatsappMessage) => whatsappMessage.metadata as AgreeToDisagreeMetadata)
+            .filter((agreeToDisagree, index, arr) => {
+                const hashArray = arr.map((agreeToDisagreeInner) => agreeToDisagreeInner.block.hash);
+                return hashArray.indexOf(agreeToDisagree.block.hash) === index;
+            })
+            .map((agreeToDisagree) => agreeToDisagree.block.counter - (agreeToDisagree.disagreeRoot.metadata as AuditableMetadata).block.counter)
+            .reduce((currentValue, acc) => currentValue + acc, 0);
+        numMessagesToSearch += agreeToDisagreeResolvesLenght;
+
+        initialAuditableMessage = whatsappMessages
+            .filter((whatsappMessage) => whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE)
+            .find((auditableMessage) => (auditableMessage.metadata as AuditableMetadata).block.counter === 0);
+        if (initialAuditableMessage && (initialAuditableMessage.metadata as AuditableMetadata).seed !== chatSeed)
+            throw new Error("Found initial message from another chat");
     }
-    const auditableMessagesRaw: AuditableMessage[] = await chrome.runtime.sendMessage({
-        action: ActionOptions.GET_MESSAGES,
-        payload: getMessages
-    } as InternalMessage);
-    console.log("Auditable Messages raw: ", auditableMessagesRaw);
 
-    // 1. Tirar as mensagens antes da inicial
-    const firstStartingMessageIndex = auditableMessagesRaw.reverse().findIndex((auditableMessage) =>
-        (auditableMessage.content === AuditableControlMessage.ACCEPT && auditableMessage.metadata?.block.counter === 0)
-    );
-    if (firstStartingMessageIndex === -1) throw new Error("Couldnt find starting message.");
-    const currentAuditableMessages = auditableMessagesRaw.slice(0, firstStartingMessageIndex + 1).reverse();
-    // 2. Tirar as mensagens de ACK
-    const auditableMessages = currentAuditableMessages.filter((auditableMessage) => {
-        const auditableMetadata = AuditableMessageMetadataSchema.safeParse(auditableMessage.metadata);
-        return auditableMetadata.success;
+    const initialIndex = whatsappMessages.findIndex((whatsappMessage) => {
+        if (whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE) {
+            return (whatsappMessage.metadata as AuditableMetadata).block.hash === (initialAuditableMessage.metadata as AuditableMetadata).block.hash;
+        }
+        return false;
     });
+    if (initialIndex === -1) throw new Error("Couldnt find starting message.");
+    const fullChat = whatsappMessages.slice(0, initialIndex + 1);
+    const chatWithoutAcks = fullChat
+        .filter((auditableMessage) => auditableMessage.metadata?.kind === MetadataOptions.AUDITABLE || auditableMessage.metadata?.kind === MetadataOptions.AGREE_TO_DISAGREE);
+    // Removed AgreeToDisagree intermediate attempts
+    const cleanChat = chatWithoutAcks.filter((auditableMessage, index, arr) => {
+        const isMetadataAuditable = auditableMessage.metadata?.kind === MetadataOptions.AUDITABLE;
+        const isMetadataAgreeToDisagree = auditableMessage.metadata?.kind === MetadataOptions.AGREE_TO_DISAGREE;
+        let isUniqueAgreeToDisagreeResolve: boolean = false;
+        if (isMetadataAgreeToDisagree && auditableMessage.content === AuditableControlMessage.AGREE_TO_DISAGREE_RESOLVE) {
+            const hashArray = arr.map((auditableMessageInner) => (auditableMessageInner.metadata as AgreeToDisagreeMetadata).block.hash);
+            isUniqueAgreeToDisagreeResolve = hashArray.indexOf((auditableMessage.metadata as AgreeToDisagreeMetadata).block.hash) === index;
+        }
+        return isMetadataAuditable || isUniqueAgreeToDisagreeResolve;
+    })
 
+    return cleanChat.reverse();
+}
+
+
+export async function finishingAuditableChatRoutine(chatId: string, chatSeed: string, finishMessageId: string, initialGuess: number) {
+    const auditableMessages = await getAuditableChat(chatId, chatSeed, finishMessageId, initialGuess);
     console.log("Auditable Messages: ", auditableMessages);
 
-    const publicLogs = auditableMessages.map((message) => message.metadata?.block as AuditableBlock);
+    const publicLogs = auditableMessages.map((message) => (message.metadata as AuditableMetadata)?.block as AuditableBlock);
     const publicJson = JSON.stringify(publicLogs);
 
     console.log("Public Logs: ", publicLogs);

@@ -1,6 +1,6 @@
 import "@wppconnect/wa-js"
 import WPP from "@wppconnect/wa-js"
-import { ActionOptions, InternalMessage, AuditableMessage, AckMetadataSchema, AckMetadata, AuditableControlMessage, AuditableMessageMetadata } from "./utils/types";
+import { ActionOptions, InternalMessage, WhatsappMessage, AckMetadata, AuditableControlMessage, AuditableMetadata, MetadataOptions } from "./utils/types";
 
 // @ts-ignore
 const WhatsappLayer: typeof WPP = window.WPP;
@@ -8,35 +8,29 @@ const WhatsappLayer: typeof WPP = window.WPP;
 WhatsappLayer.on('chat.new_message', async (chatMessage) => {
     const incomingMetadataString = chatMessage.description as string | undefined;
     const incomingMetadataObject = (typeof (incomingMetadataString) === "string")
-        ? JSON.parse(incomingMetadataString) as AuditableMessageMetadata | AckMetadata
+        ? JSON.parse(incomingMetadataString) as AuditableMetadata | AckMetadata
         : undefined;
-    let arrivedMessage: AuditableMessage | AckMetadata;
+    const arrivedMessage: WhatsappMessage = {
+        content: chatMessage.body,
+        chatId: chatMessage.id?.remote?._serialized as string,
+        author: chatMessage.from?._serialized as string,
+        metadata: incomingMetadataObject,
+        messageId: chatMessage.id._serialized,
+        timestamp: chatMessage.t,
+    };
 
-    const ackMetadata = AckMetadataSchema.safeParse(incomingMetadataObject);
+    if (!chatMessage?.from?.isUser() || !arrivedMessage.content) return;
+    if (!arrivedMessage.chatId) throw new Error(`New message has no message: ${arrivedMessage}`);
+    if (!arrivedMessage.author) throw new Error(`New message has no author: ${arrivedMessage}`);
+
+    const metadataIsAck = arrivedMessage.metadata?.kind === MetadataOptions.ACK;
 
     // Ignorar a mensagem se é um ACK na minha visão se fui eu que enviei
-    if (ackMetadata.success && chatMessage.id.fromMe) return;
+    if (metadataIsAck && chatMessage.id.fromMe) return;
 
-    if (ackMetadata.success) {
+    if (metadataIsAck) {
         if (chatMessage.body !== AuditableControlMessage.ACK) throw new Error("Ack message differs from expected message.");
-        arrivedMessage = ackMetadata.data;
-        const chatId = chatMessage.id?.remote?._serialized as string;
-        const messageId = chatMessage.id._serialized;
-        if (!chatId) throw new Error(`New ack has no message: ${arrivedMessage}`);
-        await WhatsappLayer.chat.deleteMessage(chatId, messageId);
-    } else { // The incoming message can either be an auditable message or a normal message.
-        arrivedMessage = {
-            content: chatMessage.body,
-            chatId: chatMessage.id?.remote?._serialized as string,
-            author: chatMessage.from?._serialized as string,
-            metadata: incomingMetadataObject as AuditableMessageMetadata | undefined,
-            messageId: chatMessage.id._serialized,
-            timestamp: chatMessage.t,
-        };
-
-        if (!chatMessage?.from?.isUser()) return;
-        if (!arrivedMessage.chatId) throw new Error(`New message has no message: ${arrivedMessage}`);
-        if (!arrivedMessage.author) throw new Error(`New message has no author: ${arrivedMessage}`);
+        await WhatsappLayer.chat.deleteMessage(arrivedMessage.chatId, arrivedMessage.messageId as string);
     }
 
     window.postMessage({

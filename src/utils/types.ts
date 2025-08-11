@@ -1,10 +1,9 @@
-import { z } from "zod/v4"
-
 export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
     GENERATE_AND_SEND_BLOCK = "GENERATE_AND_SEND_BLOCK",
     GET_MESSAGES = "GET_MESSAGES",
+    DELETE_MESSAGES = "DELETE_MESSAGES",
     GET_COMMITED_KEYS = "GET_COMMITED_KEYS",
     SET_INPUT_BOX = "SET_INPUT_BOX",
     SEND_TEXT_MESSAGE = "SEND_TEXT_MESSAGE",
@@ -20,7 +19,9 @@ export enum AuditableControlMessage {
     DENY = "[Control Message]\nSecure conversation denied.",
     END = "[Control Message]\nSecure conversation ended. Logs available below.",
     ABORT = "[Control Message]\nError in secure conversation, ending chat. Logs available below.",
-    ACK = "[Control Message]\nConfirmation ACK sent."
+    ACK = "[Control Message]\nConfirmation ACK sent.",
+    AGREE_TO_DISAGREE_ATTEMPT = "[Control Message]\nAttempting to resolve collision.",
+    AGREE_TO_DISAGREE_RESOLVE = "[Control Message]\nCollision resolved."
 };
 
 export enum AuditableChatStates {
@@ -36,6 +37,11 @@ export type InternalMessage = {
     payload?: any
 }
 
+export type MessagesToDelete = {
+    messages: string[];
+    chatId: string;
+}
+
 export type ChatState = {
     currentState: AuditableChatStates,
     internalAuditableChatVariables?: InternalAuditableChatVariables
@@ -45,6 +51,7 @@ export type InternalAuditableChatVariables = {
     auditableChatSeed: string;
     counter: number;
     previousHash: string;
+    agreeToDisagreeAtempt?: AgreeToDisagreeMetadata;
 }
 
 export type SendFileMessage = {
@@ -64,13 +71,23 @@ export type GetMessages = {
     options: GetMessagesOptions
 }
 
-export type AuditableMessage = {
+export type WhatsappMessage = {
     chatId: string;
     messageId?: string;
     content?: string;
     author: string;
-    metadata?: AuditableMessageMetadata;
+    metadata?: AuditableMetadata | AckMetadata | AgreeToDisagreeMetadata;
     timestamp?: number;
+}
+
+interface BaseMetadata {
+    kind: MetadataOptions
+}
+
+export enum MetadataOptions {
+    AUDITABLE = "AUDITABLE",
+    AGREE_TO_DISAGREE = "AGREE_TO_DISAGREE",
+    ACK = "ACK"
 }
 
 export type AuditableMessageContent = {
@@ -78,8 +95,8 @@ export type AuditableMessageContent = {
     author: string;
 }
 
-export type GenerateAuditableMessage = {
-    auditableMessage: AuditableMessage;
+export type GenerateWhatsappMessage = {
+    whatsappMessage: WhatsappMessage;
     startingMessage: boolean;
 }
 
@@ -94,40 +111,36 @@ export type AuditableBlock = {
     commitedMessage: string
 }
 
-export type AuditableMessageMetadata = {
+export type PreviousBlockVerificationData = {
+    hash: string,
+    controlCounter: number, // Block counter plus 1. As would be the internal counter in a normal chat.
+}
+
+export type AgreeToDisagreeBlock = {
+    hash: string,
+    previousData: Object,
+    counter: number,
+}
+
+export interface AuditableMetadata extends BaseMetadata {
+    kind: MetadataOptions.AUDITABLE;
     block: AuditableBlock;
     seed?: string;
 }
 
-export const AuditableBlockSchema = z.object({
-    hash: z.string(),
-    previousHash: z.string(),
-    counter: z.number(),
-    commitedMessage: z.string()
-});
+export type PreviousData = Map<string, PreviousBlockVerificationData>;
 
-export const AuditableMessageMetadataSchema = z.object({
-    block: AuditableBlockSchema,
-    seed: z.string().optional()
-});
-
-export type AckMetadata = {
-    blockHash: string;
-    counter: number;
-    sender: string;
-    receiver: string;
-    content: AuditableControlMessage;
+export interface AgreeToDisagreeMetadata extends BaseMetadata {
+    kind: MetadataOptions.AGREE_TO_DISAGREE;
+    block: AgreeToDisagreeBlock;
+    disagreeRoot: WhatsappMessage;
 }
 
-export const AuditableChatOptionsSchema = z.enum(AuditableControlMessage);
-
-export const AckMetadataSchema = z.object({
-    blockHash: z.string(),
-    counter: z.number(),
-    sender: z.string(),
-    receiver: z.string(),
-    content: AuditableChatOptionsSchema
-});
+export interface AckMetadata extends BaseMetadata {
+    kind: MetadataOptions.ACK;
+    blockHash: string;
+    counter: number;
+}
 
 export type BlockState = {
     hash: string;
@@ -159,4 +172,9 @@ export type HashArgs = {
     previousHash: string;
     counter: number;
     commitedMessage: string;
+}
+
+export type AgreeToDisagreeHashArgs = {
+    previousData: Object;
+    counter: number;
 }
