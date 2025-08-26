@@ -2,6 +2,7 @@ import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine
 import {
     AgreeToDisagreeBlock,
     AgreeToDisagreeHashArgs,
+    AssymetricKeys,
     AuditableBlock,
     AuditableChatMetadata,
     AuditableMessageContent,
@@ -12,6 +13,47 @@ import {
     PRFArgs,
     RandomSeedSalt
 } from "../utils/types";
+
+export async function generateKeys(): Promise<AssymetricKeys> {
+    const keyPair = await crypto.subtle.generateKey(
+        { name: 'ECDSA', namedCurve: 'P-256' },
+    /* extractable= */ true,
+        ['sign', 'verify']
+    );
+
+    const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+    const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+
+    // await chrome.storage.local.set({ "PRIVATE_KEY": privateJwk, "PUBLIC_KEY": publicJwk });
+    const userKeys = {
+        publicKey: publicJwk,
+        privateKey: privateJwk
+    }
+
+    return userKeys
+}
+
+export async function getPublicKey(): Promise<CryptoKey | undefined> {
+    const { publicJwk } = await chrome.storage.local.get(['PUBLIC_KEY']);
+    if (!publicJwk) return undefined;
+
+    const publicKey = await crypto.subtle.importKey(
+        'jwk', publicJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
+    );
+
+    return publicKey;
+}
+
+export async function getPrivateKey(): Promise<CryptoKey | undefined> {
+    const { privateJwk } = await chrome.storage.local.get(['PRIVATE_KEY']);
+    if (!privateJwk) return undefined;
+
+    const privateKey = await crypto.subtle.importKey(
+        'jwk', privateJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
+    );
+
+    return privateKey;
+}
 
 export async function assembleAgreeToDisagreeBlock(previousData: PreviousData, counter: number): Promise<AgreeToDisagreeBlock> {
     const sortedEntries = Array.from(previousData.entries()).sort((a, b) => a[0].localeCompare(b[0]));

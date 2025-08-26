@@ -42,6 +42,11 @@ export type MessagesToDelete = {
     chatId: string;
 }
 
+export type AssymetricKeys = {
+    publicKey: JsonWebKey;
+    privateKey: JsonWebKey;
+}
+
 export type ChatState = {
     currentState: AuditableChatStates,
     internalAuditableChatVariables?: InternalAuditableChatVariables

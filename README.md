@@ -17,8 +17,12 @@ If you want to tweak the code a bit, run ```npm run dev``` and every time you sa
 If you want to test the 1x1 chat, try running 2 different browsers and loading the same compiled /dist for both of them.
 
 # Refinement Pool
-- AtD block
 - Signatures
+    - Public and private keys along with user data
+    - Exchange public keys at AuditableChat acceptation
+    - Fazer função para assinar no back
+    - Mandar assinaturas junto com os acks
+    - conferir assinaturas quando chega um pacote
 
 # Bugs
 - consertar o bug de se reiniciar a pagina dar BO
