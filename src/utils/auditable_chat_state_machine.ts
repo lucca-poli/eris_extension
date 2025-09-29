@@ -72,7 +72,7 @@ export class AuditableChatStateMachine {
         this.currentState = currentState || AuditableChatStates.IDLE;
     };
 
-    static async updateState(chatId: string, incomingMessage: WhatsappMessage, options?: { messageId?: string, seed?: string }) {
+    static async updateState(chatId: string, incomingMessage: WhatsappMessage, options?: { messageId?: string, seed?: string, publicKey?: CryptoKey }) {
         const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
         const auditableChat = new AuditableChatStateMachine(chatId, auditableState?.currentState);
         let internalVariables = (await AuditableChatStateMachine.getAuditableChat(chatId))?.internalAuditableChatVariables;
@@ -108,7 +108,11 @@ export class AuditableChatStateMachine {
                         console.error("Acceptation message: ", incomingMessage);
                         throw new Error("Seed not sent in acceptation message. 1");
                     }
-                    const internalAuditableChatVariables = await AuditableChatStateMachine.assembleAuditableChatStart(options.seed);
+                    if (!options?.publicKey) {
+                        console.error("Acceptation message: ", incomingMessage);
+                        throw new Error("PublicKey not sent in acceptation message. 1");
+                    }
+                    const internalAuditableChatVariables = await AuditableChatStateMachine.assembleAuditableChatStart(options.seed, options.publicKey);
                     internalVariables = internalAuditableChatVariables;
 
                     auditableChat.currentState = AuditableChatStates.ONGOING;
@@ -381,11 +385,12 @@ export class AuditableChatStateMachine {
         return chats[chatId];
     }
 
-    static async assembleAuditableChatStart(seed: string): Promise<InternalAuditableChatVariables> {
+    static async assembleAuditableChatStart(seed: string, counterpartPublicKey?: CryptoKey): Promise<InternalAuditableChatVariables> {
         const internalAuditableChatVariables = {
             counter: 0,
             previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
             auditableChatSeed: seed,
+            counterpartPublicKey
         };
 
         return internalAuditableChatVariables;

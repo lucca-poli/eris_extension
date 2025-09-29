@@ -18,8 +18,8 @@ If you want to test the 1x1 chat, try running 2 different browsers and loading t
 
 # Refinement Pool
 - Signatures
-    - Public and private keys along with user data
     - Exchange public keys at AuditableChat acceptation
+     - Fazer ser um campo opcional. Dai se é o cara mandando ele vai botar a public key quando chegar o ack.
     - Fazer função para assinar no back
     - Mandar assinaturas junto com os acks
     - conferir assinaturas quando chega um pacote

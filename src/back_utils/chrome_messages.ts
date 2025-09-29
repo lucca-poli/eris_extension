@@ -14,12 +14,71 @@ import {
     SendFileMessage,
     MetadataOptions,
     AuditableControlMessage,
-    MessagesToDelete
+    MessagesToDelete,
+    AuditableChatStates,
+    InternalAuditableChatVariables
 } from "../utils/types";
-import { generateAuditableSeed, generateBlock, generateCommitedMessage, prf } from "./auditable_chat";
+import { generateAuditableSeed, generateBlock, generateCommitedMessage, getPublicKey, prf } from "./auditable_chat";
 import { deleteMessage, getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
 import { verificationRoutine } from "../core_utils/verify";
+
+async function processAuditableMetadata(tabId: number, chatId: string, whatsappMessage: WhatsappMessage, startingMessage: boolean, internalVariables: InternalAuditableChatVariables) {
+    const auditableBlock = (whatsappMessage.metadata as AuditableMetadata)?.block;
+    if (!auditableBlock) throw new Error("Incoming auditable message has no block.");
+
+    const userId = await AuditableChatStateMachine.getUserId();
+    if (!userId) throw new Error("No user id found.");
+    if (whatsappMessage.author === userId) return;
+
+    const { counter } = internalVariables;
+    await verificationRoutine(chatId, whatsappMessage, startingMessage);
+
+    // Updating internal state
+    await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
+    console.log("State after updating: ", await AuditableChatStateMachine.getAuditableChat(chatId));
+
+
+    // Send ACK
+    const publicKey = await getPublicKey();
+    if (!publicKey) throw new Error("No public key found.");
+    const publicKeyToSend = startingMessage ? publicKey : undefined;
+    const ackMetadata: AckMetadata = {
+        kind: MetadataOptions.ACK,
+        counter,
+        blockHash: auditableBlock.hash,
+        counterpartPublicKey: publicKeyToSend
+    };
+    const messageToSend: WhatsappMessage = {
+        author: userId,
+        chatId,
+        metadata: ackMetadata,
+        content: AuditableControlMessage.ACK
+    }
+    console.log("Ack sent: ", ackMetadata);
+    const ackResponse = await sendTextMessage(tabId, messageToSend);
+    if (!ackResponse) throw new Error("Problem in sending ACK.");
+    await deleteMessage(tabId, chatId, ackResponse.id);
+    console.log("Ack message deleted.")
+
+    console.log("State after ack sent: ", await AuditableChatStateMachine.getAuditableChat(chatId));
+}
+
+// Responsabilidades: checar pela chave publica da outra parte e verificar os acks
+async function processAckMetadata(chatId: string, whatsappMessage: WhatsappMessage, internalVariables: InternalAuditableChatVariables) {
+    const ackMetadata = (whatsappMessage.metadata as AckMetadata);
+
+    // Set public key from counterpart
+    if (!internalVariables.counterpartPublicKey && ackMetadata.counterpartPublicKey) {
+        internalVariables.counterpartPublicKey = ackMetadata.counterpartPublicKey;
+        const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
+        if (!auditableState) throw new Error("Auditable chat has no state.");
+        auditableState.internalAuditableChatVariables = internalVariables;
+        await AuditableChatStateMachine.setAuditableChat(chatId, auditableState);
+    }
+
+    // Process counterpart signature
+}
 
 export function setupChromeListeners(tabManager: TabManager) {
 
@@ -30,48 +89,25 @@ export function setupChromeListeners(tabManager: TabManager) {
         const { whatsappMessage, startingMessage } = internalMessage.payload as GenerateWhatsappMessage;
         const { chatId } = whatsappMessage;
         const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
-        if (!metadataIsAuditable) throw new Error("Incoming message is not auditable.");
+        const metadataIsAck = whatsappMessage.metadata?.kind === MetadataOptions.ACK;
         const tabId = tabManager.getWhatsappTab().id as number;
-        const auditableBlock = (whatsappMessage.metadata as AuditableMetadata)?.block;
-        if (!auditableBlock) throw new Error("Incoming auditable message has no block.");
         console.log("IncomingMessage: ", whatsappMessage);
 
         (async () => {
-            const userId = await AuditableChatStateMachine.getUserId();
-            if (!userId) throw new Error("No user id found.");
-            if (whatsappMessage.author === userId) return;
+            const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
+            const internalVariables = auditableState?.internalAuditableChatVariables;
+            if (!internalVariables) throw new Error("Auditable chat has no internal variables.");
 
-            const auditableState = (
-                await AuditableChatStateMachine.getAuditableChat(chatId)
-            )?.internalAuditableChatVariables;
-            if (!auditableState) throw new Error("Auditable chat has no state.");
-            const { counter } = auditableState;
-
-            await verificationRoutine(chatId, whatsappMessage, startingMessage);
-
-            // Updating internal state
-            await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
-            console.log("State after updating: ", await AuditableChatStateMachine.getAuditableChat(chatId));
-
-            // Send ACK
-            const ackMetadata: AckMetadata = {
-                kind: MetadataOptions.ACK,
-                counter,
-                blockHash: auditableBlock.hash,
+            // Separar em processamento de mensagem de chat auditavel e de ack
+            const stateIsWaitingAck = auditableState.currentState === AuditableChatStates.WAITING_ACK;
+            const messageIsFromPartner = whatsappMessage.author === whatsappMessage.chatId;
+            const chatHasDisagree = stateIsWaitingAck && metadataIsAuditable && messageIsFromPartner;
+            if (metadataIsAuditable && !chatHasDisagree) {
+                await processAuditableMetadata(tabId, chatId, whatsappMessage, startingMessage, internalVariables);
+            } else if (metadataIsAck) {
+                await processAckMetadata(chatId, whatsappMessage, internalVariables);
             };
-            const messageToSend: WhatsappMessage = {
-                author: userId,
-                chatId,
-                metadata: ackMetadata,
-                content: AuditableControlMessage.ACK
-            }
-            console.log("Ack sent: ", ackMetadata);
-            const ackResponse = await sendTextMessage(tabId, messageToSend);
-            if (!ackResponse) throw new Error("Problem in sending ACK.");
-            await deleteMessage(tabId, chatId, ackResponse.id);
-            console.log("Ack message deleted.")
 
-            console.log("State after ack sent: ", await AuditableChatStateMachine.getAuditableChat(chatId));
         })();
     });
 
@@ -191,6 +227,7 @@ export function setupChromeListeners(tabManager: TabManager) {
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender, sendResponse) => {
         if (internalMessage.action !== ActionOptions.SEND_TEXT_MESSAGE) return;
 
+        console.log("Trying to send message.");
         (async () => {
             const tabId = tabManager.getWhatsappTab().id as number;
             const messageReturn = await sendTextMessage(tabId, internalMessage.payload as WhatsappMessage);

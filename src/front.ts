@@ -288,10 +288,13 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const seed = metadataIsAuditable ?
         (whatsappMessage.metadata as AuditableMetadata).seed || oldState?.internalAuditableChatVariables?.auditableChatSeed :
         oldState?.internalAuditableChatVariables?.auditableChatSeed;
+    const { } = (whatsappMessage.metadata as AuditableMetadata)
+    const counterpartPublicKey = metadataIsAuditable ? (whatsappMessage.metadata as AuditableMetadata).counterpartPublicKey : undefined;
     console.log("Seed is: ", seed);
     const newState = await AuditableChatStateMachine.updateState(chatId, whatsappMessage, {
         seed,
-        messageId: whatsappMessage.messageId
+        messageId: whatsappMessage.messageId,
+        publicKey: counterpartPublicKey
     });
     console.log("newState is: ", newState);
     currentAuditableChatId = chatId;
@@ -303,12 +306,6 @@ window.addEventListener("message", async (event: MessageEvent) => {
         if (!currentAuditableChat) throw new Error("Auditable Chat still not registered.");
         domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
     }
-
-    // Se a mensagem for de um chat auditavel eu mando pro back processar
-    const stateIsWaitingAck = newState.currentState === AuditableChatStates.WAITING_ACK;
-    const messageIsFromPartner = whatsappMessage.author === whatsappMessage.chatId;
-    const chatHasDisagree = stateIsWaitingAck && metadataIsAuditable && messageIsFromPartner;
-    if (!(metadataIsAuditable && !chatHasDisagree)) return;
 
     const oldStateIsRequest = (oldState?.currentState === AuditableChatStates.REQUEST_SENT) || (oldState?.currentState === AuditableChatStates.REQUEST_RECEIVED);
     const newStateIsAuditable = newState?.currentState === AuditableChatStates.ONGOING;

@@ -24,7 +24,6 @@ export async function generateKeys(): Promise<AssymetricKeys> {
     const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
     const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
 
-    // await chrome.storage.local.set({ "PRIVATE_KEY": privateJwk, "PUBLIC_KEY": publicJwk });
     const userKeys = {
         publicKey: publicJwk,
         privateKey: privateJwk
@@ -34,7 +33,7 @@ export async function generateKeys(): Promise<AssymetricKeys> {
 }
 
 export async function getPublicKey(): Promise<CryptoKey | undefined> {
-    const { publicJwk } = await chrome.storage.local.get(['PUBLIC_KEY']);
+    const publicJwk = (await chrome.storage.local.get(['PUBLIC_KEY']))['PUBLIC_KEY'];
     if (!publicJwk) return undefined;
 
     const publicKey = await crypto.subtle.importKey(
@@ -45,7 +44,7 @@ export async function getPublicKey(): Promise<CryptoKey | undefined> {
 }
 
 export async function getPrivateKey(): Promise<CryptoKey | undefined> {
-    const { privateJwk } = await chrome.storage.local.get(['PRIVATE_KEY']);
+    const { privateJwk } = (await chrome.storage.local.get(['PRIVATE_KEY']))['PRIVATE_KEY'];
     if (!privateJwk) return undefined;
 
     const privateKey = await crypto.subtle.importKey(
