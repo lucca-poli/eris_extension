@@ -42,7 +42,8 @@ async function processAuditableMetadata(tabId: number, chatId: string, whatsappM
     // Send ACK
     const publicKey = await getPublicKey();
     if (!publicKey) throw new Error("No public key found.");
-    const publicKeyToSend = startingMessage ? publicKey : undefined;
+    const exportablePublicKey = await crypto.subtle.exportKey("jwk", publicKey);
+    const publicKeyToSend = startingMessage ? exportablePublicKey : undefined;
     const ackMetadata: AckMetadata = {
         kind: MetadataOptions.ACK,
         counter,
@@ -95,16 +96,19 @@ export function setupChromeListeners(tabManager: TabManager) {
 
         (async () => {
             const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
-            const internalVariables = auditableState?.internalAuditableChatVariables;
-            if (!internalVariables) throw new Error("Auditable chat has no internal variables.");
+            if (!auditableState) throw new Error("Auditable chat is not present.");
 
             // Separar em processamento de mensagem de chat auditavel e de ack
             const stateIsWaitingAck = auditableState.currentState === AuditableChatStates.WAITING_ACK;
             const messageIsFromPartner = whatsappMessage.author === whatsappMessage.chatId;
             const chatHasDisagree = stateIsWaitingAck && metadataIsAuditable && messageIsFromPartner;
             if (metadataIsAuditable && !chatHasDisagree) {
+                const internalVariables = auditableState?.internalAuditableChatVariables;
+                if (!internalVariables) throw new Error("Auditable chat has no internal variables.");
                 await processAuditableMetadata(tabId, chatId, whatsappMessage, startingMessage, internalVariables);
             } else if (metadataIsAck) {
+                const internalVariables = auditableState?.internalAuditableChatVariables;
+                if (!internalVariables) throw new Error("Auditable chat has no internal variables.");
                 await processAckMetadata(chatId, whatsappMessage, internalVariables);
             };
 
@@ -140,10 +144,14 @@ export function setupChromeListeners(tabManager: TabManager) {
             }
 
             const commitedMessage = await generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
+            const publicKey = await getPublicKey();
+            if (!publicKey) throw new Error("No public key found.");
+            const exportablePublicKey = await crypto.subtle.exportKey("jwk", publicKey);
 
             whatsappMessage.metadata = {
                 kind: MetadataOptions.AUDITABLE,
                 block: await generateBlock(commitedMessage, initChatState),
+                counterpartPublicKey: exportablePublicKey,
                 seed
             } as AuditableMetadata;
         } else {

@@ -14,6 +14,37 @@ import {
     RandomSeedSalt
 } from "../utils/types";
 
+export async function generateSignature(privateKey: CryptoKey, block: AuditableBlock) {
+    const dataToEncode = JSON.stringify(block);
+    const encoder = new TextEncoder();
+    const data = encoder.encode(dataToEncode);
+
+    const signature = await crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        privateKey,
+        data
+    );
+    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+
+    return signatureB64;
+}
+
+export async function verifySignature(publicKey: CryptoKey, signatureB64: string, block: AuditableBlock): Promise<boolean> {
+    const signature = new Uint8Array(atob(signatureB64).split("").map(c => c.charCodeAt(0)));
+    const dataToEncode = JSON.stringify(block);
+    const encoder = new TextEncoder();
+    const data = encoder.encode(dataToEncode);
+
+    const isValid = await crypto.subtle.verify(
+        { name: "ECDSA", hash: "SHA-256" },
+        publicKey,
+        signature,
+        data
+    );
+
+    return isValid;
+}
+
 export async function generateKeys(): Promise<AssymetricKeys> {
     const keyPair = await crypto.subtle.generateKey(
         { name: 'ECDSA', namedCurve: 'P-256' },
@@ -33,11 +64,11 @@ export async function generateKeys(): Promise<AssymetricKeys> {
 }
 
 export async function getPublicKey(): Promise<CryptoKey | undefined> {
-    const publicJwk = (await chrome.storage.local.get(['PUBLIC_KEY']))['PUBLIC_KEY'];
+    const publicJwk = (await chrome.storage.local.get(['PUBLIC_KEY']))['PUBLIC_KEY'] as JsonWebKey;
     if (!publicJwk) return undefined;
 
     const publicKey = await crypto.subtle.importKey(
-        'jwk', publicJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
+        'jwk', publicJwk, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']
     );
 
     return publicKey;
@@ -48,7 +79,7 @@ export async function getPrivateKey(): Promise<CryptoKey | undefined> {
     if (!privateJwk) return undefined;
 
     const privateKey = await crypto.subtle.importKey(
-        'jwk', privateJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
+        'jwk', privateJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']
     );
 
     return privateKey;

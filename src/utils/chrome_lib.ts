@@ -30,7 +30,6 @@ export async function getUserId(tabId: number) {
 export async function sendTextMessage(tabId: number, chatMessage: WhatsappMessage) {
     const { content } = chatMessage;
 
-    console.log("Trying to send message with library.");
     const metadata = chatMessage.metadata;
     const metadataString = metadata ? JSON.stringify(metadata) : "";
     if (typeof (content) !== "string") throw new Error("Content is undefined.");

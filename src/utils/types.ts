@@ -54,7 +54,7 @@ export type ChatState = {
 
 export type InternalAuditableChatVariables = {
     auditableChatSeed: string;
-    counterpartPublicKey?: CryptoKey;
+    counterpartPublicKey?: JsonWebKey;
     counter: number;
     previousHash: string;
     agreeToDisagreeAtempt?: AgreeToDisagreeMetadata;
@@ -131,7 +131,7 @@ export type AgreeToDisagreeBlock = {
 export interface AuditableMetadata extends BaseMetadata {
     kind: MetadataOptions.AUDITABLE;
     block: AuditableBlock;
-    counterpartPublicKey?: CryptoKey;
+    counterpartPublicKey?: JsonWebKey;
     seed?: string;
 }
 
@@ -146,7 +146,7 @@ export interface AgreeToDisagreeMetadata extends BaseMetadata {
 export interface AckMetadata extends BaseMetadata {
     kind: MetadataOptions.ACK;
     blockHash: string;
-    counterpartPublicKey?: CryptoKey;
+    counterpartPublicKey?: JsonWebKey;
     counter: number;
 }
 

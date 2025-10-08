@@ -288,7 +288,6 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const seed = metadataIsAuditable ?
         (whatsappMessage.metadata as AuditableMetadata).seed || oldState?.internalAuditableChatVariables?.auditableChatSeed :
         oldState?.internalAuditableChatVariables?.auditableChatSeed;
-    const { } = (whatsappMessage.metadata as AuditableMetadata)
     const counterpartPublicKey = metadataIsAuditable ? (whatsappMessage.metadata as AuditableMetadata).counterpartPublicKey : undefined;
     console.log("Seed is: ", seed);
     const newState = await AuditableChatStateMachine.updateState(chatId, whatsappMessage, {
@@ -309,11 +308,14 @@ window.addEventListener("message", async (event: MessageEvent) => {
 
     const oldStateIsRequest = (oldState?.currentState === AuditableChatStates.REQUEST_SENT) || (oldState?.currentState === AuditableChatStates.REQUEST_RECEIVED);
     const newStateIsAuditable = newState?.currentState === AuditableChatStates.ONGOING;
+    const isStartingMessage = (oldStateIsRequest && newStateIsAuditable) ? true : false;
+    const auditableMetadata = (whatsappMessage.metadata as AuditableMetadata);
+    if (isStartingMessage && !auditableMetadata.counterpartPublicKey) throw new Error("Starting message without counterpart public key.");
     chrome.runtime.sendMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,
         payload: {
             whatsappMessage,
-            startingMessage: (oldStateIsRequest && newStateIsAuditable) ? true : false
+            startingMessage: isStartingMessage
         } as GenerateWhatsappMessage,
     } as InternalMessage);
 });

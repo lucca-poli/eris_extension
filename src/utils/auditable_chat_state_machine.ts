@@ -72,7 +72,7 @@ export class AuditableChatStateMachine {
         this.currentState = currentState || AuditableChatStates.IDLE;
     };
 
-    static async updateState(chatId: string, incomingMessage: WhatsappMessage, options?: { messageId?: string, seed?: string, publicKey?: CryptoKey }) {
+    static async updateState(chatId: string, incomingMessage: WhatsappMessage, options?: { messageId?: string, seed?: string, publicKey?: JsonWebKey }) {
         const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
         const auditableChat = new AuditableChatStateMachine(chatId, auditableState?.currentState);
         let internalVariables = (await AuditableChatStateMachine.getAuditableChat(chatId))?.internalAuditableChatVariables;
@@ -385,7 +385,7 @@ export class AuditableChatStateMachine {
         return chats[chatId];
     }
 
-    static async assembleAuditableChatStart(seed: string, counterpartPublicKey?: CryptoKey): Promise<InternalAuditableChatVariables> {
+    static async assembleAuditableChatStart(seed: string, counterpartPublicKey?: JsonWebKey): Promise<InternalAuditableChatVariables> {
         const internalAuditableChatVariables = {
             counter: 0,
             previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
