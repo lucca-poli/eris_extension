@@ -14,7 +14,7 @@ import {
     RandomSeedSalt
 } from "../utils/types";
 
-export async function generateSignature(privateKey: CryptoKey, block: AuditableBlock) {
+export async function generateSignature(privateKey: CryptoKey, block: AuditableBlock | AgreeToDisagreeBlock) {
     const dataToEncode = JSON.stringify(block);
     const encoder = new TextEncoder();
     const data = encoder.encode(dataToEncode);
@@ -75,7 +75,7 @@ export async function getPublicKey(): Promise<CryptoKey | undefined> {
 }
 
 export async function getPrivateKey(): Promise<CryptoKey | undefined> {
-    const { privateJwk } = (await chrome.storage.local.get(['PRIVATE_KEY']))['PRIVATE_KEY'];
+    const privateJwk = (await chrome.storage.local.get(['PRIVATE_KEY']))['PRIVATE_KEY'] as JsonWebKey;
     if (!privateJwk) return undefined;
 
     const privateKey = await crypto.subtle.importKey(

@@ -18,7 +18,7 @@ import {
     AuditableChatStates,
     InternalAuditableChatVariables
 } from "../utils/types";
-import { generateAuditableSeed, generateBlock, generateCommitedMessage, getPublicKey, prf } from "./auditable_chat";
+import { generateAuditableSeed, generateBlock, generateCommitedMessage, generateSignature, getPrivateKey, getPublicKey, prf } from "./auditable_chat";
 import { deleteMessage, getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
 import { verificationRoutine } from "../core_utils/verify";
@@ -31,8 +31,10 @@ async function processAuditableMetadata(tabId: number, chatId: string, whatsappM
     if (!userId) throw new Error("No user id found.");
     if (whatsappMessage.author === userId) return;
 
-    const { counter } = internalVariables;
     await verificationRoutine(chatId, whatsappMessage, startingMessage);
+    const privateKey = await getPrivateKey();
+    if (!privateKey) throw new Error("No private key found.");
+    const signature = await generateSignature(privateKey, auditableBlock);
 
     // Updating internal state
     await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
@@ -46,8 +48,8 @@ async function processAuditableMetadata(tabId: number, chatId: string, whatsappM
     const publicKeyToSend = startingMessage ? exportablePublicKey : undefined;
     const ackMetadata: AckMetadata = {
         kind: MetadataOptions.ACK,
-        counter,
-        blockHash: auditableBlock.hash,
+        block: auditableBlock,
+        signature,
         counterpartPublicKey: publicKeyToSend
     };
     const messageToSend: WhatsappMessage = {
@@ -122,6 +124,8 @@ export function setupChromeListeners(tabManager: TabManager) {
         const { whatsappMessage, startingMessage } = internalMessage.payload as GenerateWhatsappMessage;
         const chatId = whatsappMessage.chatId;
         const tabId = tabManager.getWhatsappTab().id as number;
+        const privateKey = await getPrivateKey();
+        if (!privateKey) throw new Error("No private key found.");
 
         if (startingMessage) {
             // User envia mensagem de aceite
@@ -144,14 +148,18 @@ export function setupChromeListeners(tabManager: TabManager) {
             }
 
             const commitedMessage = await generateCommitedMessage(chatId, auditableMetadata, initChatState.counter);
+            const initialBlock = await generateBlock(commitedMessage, initChatState);
+
             const publicKey = await getPublicKey();
             if (!publicKey) throw new Error("No public key found.");
             const exportablePublicKey = await crypto.subtle.exportKey("jwk", publicKey);
+            const signature = await generateSignature(privateKey, initialBlock);
 
             whatsappMessage.metadata = {
                 kind: MetadataOptions.AUDITABLE,
-                block: await generateBlock(commitedMessage, initChatState),
+                block: initialBlock,
                 counterpartPublicKey: exportablePublicKey,
+                signature,
                 seed
             } as AuditableMetadata;
         } else {
@@ -173,10 +181,13 @@ export function setupChromeListeners(tabManager: TabManager) {
             };
 
             const commitedMessage = await generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
+            const auditableBlock = await generateBlock(commitedMessage, previousBlockState);
+            const signature = await generateSignature(privateKey, auditableBlock);
 
             whatsappMessage.metadata = {
                 kind: MetadataOptions.AUDITABLE,
-                block: await generateBlock(commitedMessage, previousBlockState),
+                block: auditableBlock,
+                signature,
                 seed: undefined
             } as AuditableMetadata;
         }
@@ -235,7 +246,6 @@ export function setupChromeListeners(tabManager: TabManager) {
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender, sendResponse) => {
         if (internalMessage.action !== ActionOptions.SEND_TEXT_MESSAGE) return;
 
-        console.log("Trying to send message.");
         (async () => {
             const tabId = tabManager.getWhatsappTab().id as number;
             const messageReturn = await sendTextMessage(tabId, internalMessage.payload as WhatsappMessage);

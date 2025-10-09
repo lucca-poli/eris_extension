@@ -131,6 +131,7 @@ export type AgreeToDisagreeBlock = {
 export interface AuditableMetadata extends BaseMetadata {
     kind: MetadataOptions.AUDITABLE;
     block: AuditableBlock;
+    signature: string;
     counterpartPublicKey?: JsonWebKey;
     seed?: string;
 }
@@ -141,13 +142,14 @@ export interface AgreeToDisagreeMetadata extends BaseMetadata {
     kind: MetadataOptions.AGREE_TO_DISAGREE;
     block: AgreeToDisagreeBlock;
     disagreeRoot: WhatsappMessage;
+    signature: string;
 }
 
 export interface AckMetadata extends BaseMetadata {
     kind: MetadataOptions.ACK;
-    blockHash: string;
+    block: AuditableBlock | AgreeToDisagreeBlock;
+    signature: string;
     counterpartPublicKey?: JsonWebKey;
-    counter: number;
 }
 
 export type BlockState = {

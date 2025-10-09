@@ -1,5 +1,5 @@
 import { fetchLastMessagesFront } from "../core_utils/data_aquisition";
-import { assembleAgreeToDisagreeBlock } from "../back_utils/auditable_chat";
+import { assembleAgreeToDisagreeBlock, generateSignature, getPrivateKey } from "../back_utils/auditable_chat";
 import { verificationRoutine } from "../core_utils/verify";
 import { finishingAuditableChatRoutine } from "./finishing_routine";
 import { AckMetadata, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, WhatsappMessage, ChatState, ActionOptions, InternalMessage, MetadataOptions, AuditableMetadata, AgreeToDisagreeMetadata, PreviousBlockVerificationData, PreviousData, GetMessagesOptions, MessagesToDelete } from "./types";
@@ -235,10 +235,14 @@ export class AuditableChatStateMachine {
                     ]);
                     const newCounter = (collisionMessage.metadata as AuditableMetadata).block.counter + collidedMessages.length;
                     const agreeToDisagreeBlock = await assembleAgreeToDisagreeBlock(previousData, newCounter);
+                    const privateKey = await getPrivateKey();
+                    if (!privateKey) throw new Error("No private key found.");
+                    const signature = await generateSignature(privateKey, agreeToDisagreeBlock);
                     const agreeToDisagreeMetadata: AgreeToDisagreeMetadata = {
                         kind: MetadataOptions.AGREE_TO_DISAGREE,
                         block: agreeToDisagreeBlock,
-                        disagreeRoot: collisionMessage
+                        disagreeRoot: collisionMessage,
+                        signature
                     };
                     // 4. Store it on memory
                     if (!internalVariables) throw new Error("No internal variables found.");
@@ -344,12 +348,13 @@ export class AuditableChatStateMachine {
                 console.log("internal state: ", internalVariables);
                 const internalCounter = internalVariables?.counter;
                 if (!internalCounter) throw new Error("No internal counter present.");
-                if (ack.counter + 1 > internalCounter) throw new Error("Messages arrived out of order.");
+                const internalCounterOffset = 1;
+                if (ack.block.counter + internalCounterOffset > internalCounter) throw new Error("Messages arrived out of order.");
                 // If the ack counter is less than the internal counter, should keep at WAITING_ACK state
 
                 // TODO: Include signature verifying in the future
 
-                if (ack.counter + 1 === internalCounter) auditableChat.currentState = AuditableChatStates.ONGOING;
+                if (ack.block.counter + internalCounterOffset === internalCounter) auditableChat.currentState = AuditableChatStates.ONGOING;
                 break;
             default:
                 throw new Error(`Unexpected State in conversation: ${auditableChat.currentState}`)
