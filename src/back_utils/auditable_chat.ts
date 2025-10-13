@@ -29,6 +29,13 @@ export async function generateSignature(privateKey: CryptoKey, block: AuditableB
     return signatureB64;
 }
 
+export async function convertTextKey(key: JsonWebKey): Promise<CryptoKey> {
+    return crypto.subtle.importKey(
+        'jwk', key, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']
+    );
+
+}
+
 export async function verifySignature(publicKey: CryptoKey, signatureB64: string, block: AuditableBlock): Promise<boolean> {
     const signature = new Uint8Array(atob(signatureB64).split("").map(c => c.charCodeAt(0)));
     const dataToEncode = JSON.stringify(block);

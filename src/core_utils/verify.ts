@@ -1,17 +1,20 @@
 import { AuditableChatMetadata, AuditableMessageContent, AuditableMetadata, MetadataOptions, PreviousBlockVerificationData, WhatsappMessage } from "../utils/types";
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { generateBlock, generateCommitedMessage } from "../back_utils/auditable_chat";
+import { convertTextKey, generateBlock, generateCommitedMessage, verifySignature } from "../back_utils/auditable_chat";
 
 export async function verificationRoutine(chatId: string, whatsappMessage: WhatsappMessage, startingMessage: boolean, previousAuditableBlock?: PreviousBlockVerificationData) {
     const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
     if (!metadataIsAuditable) throw new Error("Incoming auditable message has no block.");
-    const auditableBlock = (whatsappMessage.metadata as AuditableMetadata)?.block;
+    const auditableMetadata = whatsappMessage.metadata as AuditableMetadata;
+    const auditableBlock = (whatsappMessage.metadata as AuditableMetadata).block;
 
     // Acquiring previous message data
     const auditableState = (
         await AuditableChatStateMachine.getAuditableChat(chatId)
     )?.internalAuditableChatVariables;
     if (!auditableState) throw new Error("Auditable chat has no state.");
+    const counterpartPublicKey = auditableState.counterpartPublicKey;
+    if (!counterpartPublicKey) throw new Error("Chat counterpart public key not to be found.");
     let { previousHash, counter } = auditableState;
     if (previousAuditableBlock) {
         previousHash = previousAuditableBlock.hash;
@@ -20,6 +23,12 @@ export async function verificationRoutine(chatId: string, whatsappMessage: Whats
     console.log("Verifying message: ", whatsappMessage);
     console.log("previousHash used in verification: ", previousHash);
     console.log("counter used in verification: ", counter);
+
+    // Verifying signature
+    console.log("Checking signature.");
+    const counterpartPublicKeyReadable = await convertTextKey(counterpartPublicKey);
+    const signResult = await verifySignature(counterpartPublicKeyReadable, auditableMetadata.signature, auditableBlock);
+    if (!signResult) throw new Error("False signature!");
 
     // Verifying counter - Todos os erros a seguir deveriam encerrar a conversa auditavel
     if (auditableBlock.counter < counter) {
