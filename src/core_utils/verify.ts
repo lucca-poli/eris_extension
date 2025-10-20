@@ -1,6 +1,6 @@
 import { AuditableChatMetadata, AuditableMessageContent, AuditableMetadata, MetadataOptions, PreviousBlockVerificationData, WhatsappMessage } from "../utils/types";
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
-import { convertTextKey, generateBlock, generateCommitedMessage, verifySignature } from "../back_utils/auditable_chat";
+import { convertTextKey, generateBlock, generateCommitedMessage, generateSignature, getPrivateKey, getPublicKey, verifySignature } from "../back_utils/auditable_chat";
 
 export async function verificationRoutine(chatId: string, whatsappMessage: WhatsappMessage, startingMessage: boolean, previousAuditableBlock?: PreviousBlockVerificationData) {
     const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
@@ -15,6 +15,9 @@ export async function verificationRoutine(chatId: string, whatsappMessage: Whats
     if (!auditableState) throw new Error("Auditable chat has no state.");
     const counterpartPublicKey = auditableState.counterpartPublicKey;
     if (!counterpartPublicKey) throw new Error("Chat counterpart public key not to be found.");
+    const counterpartPublicKeyReadable = await convertTextKey(counterpartPublicKey);
+    const ownPublicKey = await getPublicKey();
+    if (!ownPublicKey) throw new Error("Chat own public key not to be found.");
     let { previousHash, counter } = auditableState;
     if (previousAuditableBlock) {
         previousHash = previousAuditableBlock.hash;
@@ -25,10 +28,28 @@ export async function verificationRoutine(chatId: string, whatsappMessage: Whats
     console.log("counter used in verification: ", counter);
 
     // Verifying signature
-    console.log("Checking signature.");
-    const counterpartPublicKeyReadable = await convertTextKey(counterpartPublicKey);
-    const signResult = await verifySignature(counterpartPublicKeyReadable, auditableMetadata.signature, auditableBlock);
-    if (!signResult) throw new Error("False signature!");
+    console.log("Checking signature in message.");
+    const authorIsSelf = whatsappMessage.author !== whatsappMessage.chatId;
+    const publicKey = authorIsSelf ? ownPublicKey : counterpartPublicKeyReadable;
+    const signResult = await verifySignature(publicKey, auditableMetadata.signature, auditableBlock);
+    if (!signResult) {
+        if (authorIsSelf) {
+            const privateKey = await getPrivateKey();
+            if (!privateKey) throw new Error("could in");
+            const signature = await generateSignature(privateKey, auditableBlock);
+            console.error("Message from author: ", authorIsSelf, '\n',
+                "public key is: ", await crypto.subtle.exportKey('jwk', publicKey), '\n',
+                "message:", whatsappMessage, '\n',
+                "signature should be: ", signature
+            );
+        } else {
+            console.error("Message from author: ", authorIsSelf, '\n',
+                "public key is: ", await crypto.subtle.exportKey('jwk', publicKey), '\n',
+                "message:", whatsappMessage
+            );
+        }
+        throw new Error("False signature!");
+    }
 
     // Verifying counter - Todos os erros a seguir deveriam encerrar a conversa auditavel
     if (auditableBlock.counter < counter) {

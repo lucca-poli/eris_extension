@@ -256,7 +256,7 @@ class DomProcessor {
     }
 
     private setupAuditableSubtitle() {
-        const originalChatBox = document.querySelectorAll("div.x78zum5.x1q0g3np.x1iyjqo2.x6ikm8r.x10wlt62.x1jchvi3.xdod15v.x1wm35g.x1yc453h.xlyipyv.xuxw1ft.xh8yej3.x1s688f")[0]?.firstElementChild?.firstElementChild?.firstElementChild;
+        const originalChatBox = document.getElementById("main")?.querySelector('header')?.children[1].firstElementChild?.firstElementChild?.firstElementChild?.firstElementChild?.firstElementChild;
         if (typeof (originalChatBox?.innerHTML) !== "string") throw new Error("Chat title not found.");
         const newChatTitle = originalChatBox.innerHTML + DomProcessor.AUDITABLE_SUBTITLE;
         originalChatBox.innerHTML = newChatTitle;

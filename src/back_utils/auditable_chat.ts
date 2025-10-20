@@ -14,10 +14,36 @@ import {
     RandomSeedSalt
 } from "../utils/types";
 
+function orderedStringify(
+    value: AuditableBlock | AgreeToDisagreeBlock | Record<string, unknown> | unknown
+): string {
+    if (value === null || typeof value !== "object") {
+        return JSON.stringify(value);
+    }
+
+    if (Array.isArray(value)) {
+        return `[${value.map((v) => orderedStringify(v)).join(",")}]`;
+    }
+
+    const entries = Object.entries(value as Record<string, unknown>)
+        .filter(([_, v]) => v !== undefined) // omit undefined fields
+        .sort(([a], [b]) => a.localeCompare(b));
+
+    const body = entries
+        .map(([k, v]) => `${JSON.stringify(k)}:${orderedStringify(v)}`)
+        .join(",");
+
+    return `{${body}}`;
+}
+
 export async function generateSignature(privateKey: CryptoKey, block: AuditableBlock | AgreeToDisagreeBlock) {
-    const dataToEncode = JSON.stringify(block);
+    const dataToEncode = orderedStringify(block);
     const encoder = new TextEncoder();
     const data = encoder.encode(dataToEncode);
+
+    console.log("Generating signature.");
+    console.log("Stringified data:", dataToEncode);
+    console.log("Hash length:", data.length);
 
     const signature = await crypto.subtle.sign(
         { name: "ECDSA", hash: "SHA-256" },
@@ -36,11 +62,15 @@ export async function convertTextKey(key: JsonWebKey): Promise<CryptoKey> {
 
 }
 
-export async function verifySignature(publicKey: CryptoKey, signatureB64: string, block: AuditableBlock): Promise<boolean> {
+export async function verifySignature(publicKey: CryptoKey, signatureB64: string, block: AuditableBlock | AgreeToDisagreeBlock): Promise<boolean> {
     const signature = new Uint8Array(atob(signatureB64).split("").map(c => c.charCodeAt(0)));
-    const dataToEncode = JSON.stringify(block);
+    const dataToEncode = orderedStringify(block);
     const encoder = new TextEncoder();
     const data = encoder.encode(dataToEncode);
+
+    console.log("Verifying signature.");
+    console.log("Stringified data:", dataToEncode);
+    console.log("Hash length:", data.length);
 
     const isValid = await crypto.subtle.verify(
         { name: "ECDSA", hash: "SHA-256" },

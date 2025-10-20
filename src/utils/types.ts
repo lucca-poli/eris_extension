@@ -58,6 +58,8 @@ export type InternalAuditableChatVariables = {
     counter: number;
     previousHash: string;
     agreeToDisagreeAtempt?: AgreeToDisagreeMetadata;
+    selfSignature?: Signature;
+    counterpartSignature?: Signature;
 }
 
 export type SendFileMessage = {
@@ -150,6 +152,12 @@ export interface AckMetadata extends BaseMetadata {
     block: AuditableBlock | AgreeToDisagreeBlock;
     signature: string;
     counterpartPublicKey?: JsonWebKey;
+}
+
+export type Signature = {
+    signature: string;
+    blockHash: string;
+    counter: number;
 }
 
 export type BlockState = {

@@ -16,15 +16,27 @@ import {
     AuditableControlMessage,
     MessagesToDelete,
     AuditableChatStates,
-    InternalAuditableChatVariables
+    InternalAuditableChatVariables,
+    Signature
 } from "../utils/types";
-import { generateAuditableSeed, generateBlock, generateCommitedMessage, generateSignature, getPrivateKey, getPublicKey, prf } from "./auditable_chat";
+import {
+    convertTextKey,
+    generateAuditableSeed,
+    generateBlock,
+    generateCommitedMessage,
+    generateSignature,
+    getPrivateKey,
+    getPublicKey,
+    prf,
+    verifySignature
+} from "./auditable_chat";
 import { deleteMessage, getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
 import { verificationRoutine } from "../core_utils/verify";
 
 async function processAuditableMetadata(tabId: number, chatId: string, whatsappMessage: WhatsappMessage, startingMessage: boolean, internalVariables: InternalAuditableChatVariables) {
-    const auditableBlock = (whatsappMessage.metadata as AuditableMetadata)?.block;
+    const auditableMetadata = whatsappMessage.metadata as AuditableMetadata;
+    const auditableBlock = auditableMetadata?.block;
     if (!auditableBlock) throw new Error("Incoming auditable message has no block.");
 
     const userId = await AuditableChatStateMachine.getUserId();
@@ -32,9 +44,26 @@ async function processAuditableMetadata(tabId: number, chatId: string, whatsappM
     if (whatsappMessage.author === userId) return;
 
     await verificationRoutine(chatId, whatsappMessage, startingMessage);
+
+    // Updating counterpart signature reference
+    const counterpartSignature = {
+        signature: auditableMetadata.signature,
+        counter: auditableBlock.counter,
+        blockHash: auditableBlock.hash
+    };
+    await updateSignature(chatId, counterpartSignature, false);
+
     const privateKey = await getPrivateKey();
     if (!privateKey) throw new Error("No private key found.");
     const signature = await generateSignature(privateKey, auditableBlock);
+
+    // Updating own signature reference
+    const ownSignature = {
+        signature,
+        counter: auditableBlock.counter,
+        blockHash: auditableBlock.hash
+    };
+    await updateSignature(chatId, ownSignature, true);
 
     // Updating internal state
     await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
@@ -81,6 +110,41 @@ async function processAckMetadata(chatId: string, whatsappMessage: WhatsappMessa
     }
 
     // Process counterpart signature
+    if (!internalVariables.counterpartPublicKey) throw new Error("Counterpart public key not found.");
+    console.log("Checking signature in ack.");
+    const counterpartPublicKeyReadable = await convertTextKey(internalVariables.counterpartPublicKey);
+    const signResult = await verifySignature(counterpartPublicKeyReadable, ackMetadata.signature, ackMetadata.block);
+    if (!signResult) {
+        console.error("ackMetadata:", ackMetadata);
+        throw new Error("False signature!");
+    }
+
+    // Updating counterpart signature reference
+    const counterpartSignature = {
+        signature: ackMetadata.signature,
+        counter: ackMetadata.block.counter,
+        blockHash: ackMetadata.block.hash
+    };
+    await updateSignature(chatId, counterpartSignature, false);
+}
+
+export async function updateSignature(chatId: string, newSignature: Signature, ownSignature: boolean) {
+    const currentAuditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
+    if (!currentAuditableState) throw new Error("No state found for this chat.");
+    if (!currentAuditableState.internalAuditableChatVariables) throw new Error("No internal state found for this chat.");
+    console.log("current state of signatures: ", currentAuditableState.internalAuditableChatVariables);
+
+    const counterpartCounter = currentAuditableState.internalAuditableChatVariables.counterpartSignature?.counter || -1;
+    const ownCounter = currentAuditableState.internalAuditableChatVariables.selfSignature?.counter || -1;
+
+    if (ownSignature && newSignature.counter > ownCounter) {
+        currentAuditableState.internalAuditableChatVariables.selfSignature = newSignature;
+    }
+    if (!ownSignature && newSignature.counter > counterpartCounter) {
+        currentAuditableState.internalAuditableChatVariables.counterpartSignature = newSignature;
+    }
+
+    await AuditableChatStateMachine.setAuditableChat(chatId, currentAuditableState);
 }
 
 export function setupChromeListeners(tabManager: TabManager) {
@@ -183,6 +247,8 @@ export function setupChromeListeners(tabManager: TabManager) {
             const commitedMessage = await generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
             const auditableBlock = await generateBlock(commitedMessage, previousBlockState);
             const signature = await generateSignature(privateKey, auditableBlock);
+            console.log("Signing on: ", auditableBlock);
+            console.log("Resulting signature: ", signature);
 
             whatsappMessage.metadata = {
                 kind: MetadataOptions.AUDITABLE,
@@ -194,6 +260,15 @@ export function setupChromeListeners(tabManager: TabManager) {
 
         const updatedHash = whatsappMessage.metadata.block.hash;
         await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
+
+        // Updating own signature reference
+        const auditableMetadata = whatsappMessage.metadata as AuditableMetadata;
+        const ownSignature = {
+            signature: auditableMetadata.signature,
+            counter: auditableMetadata.block.counter,
+            blockHash: auditableMetadata.block.hash
+        };
+        await updateSignature(chatId, ownSignature, true);
 
         const returnStatus = await sendTextMessage(tabId, whatsappMessage);
         console.log("Message sent: ", returnStatus);

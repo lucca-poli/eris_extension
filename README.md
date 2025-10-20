@@ -18,11 +18,7 @@ If you want to test the 1x1 chat, try running 2 different browsers and loading t
 
 # Refinement Pool
 - Signatures
-    - Exchange public keys at AuditableChat acceptation
-     - Fazer ser um campo opcional. Dai se é o cara mandando ele vai botar a public key quando chegar o ack.
-    - Fazer função para assinar no back
-    - Mandar assinaturas junto com os acks
-    - conferir assinaturas quando chega um pacote
+    - quando atualizar as assinaturas: se eu enviar mensagem, atualizo a minha, se chegar ack atualizo a dele, se eu assinar a mensagem dele e mandar ack atualizar a minha
 
 # Bugs
 - consertar o bug de se reiniciar a pagina dar BO
