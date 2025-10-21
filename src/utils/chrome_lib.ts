@@ -1,4 +1,4 @@
-import { AckMetadata, WhatsappMessage, AuditableMetadata, GetMessagesOptions } from "./types";
+import { WhatsappMessage, AuditableMetadata, GetMessagesOptions } from "./types";
 import WPP from "@wppconnect/wa-js"
 
 export function setInputbox(tabId: number, message: string) {

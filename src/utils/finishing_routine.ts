@@ -1,5 +1,7 @@
+import { getPublicKey } from "../back_utils/auditable_chat";
 import { fetchLastMessagesFront } from "../core_utils/data_aquisition";
 import { ActionOptions, AuditableBlock, AuditableControlMessage, WhatsappMessage, GetCommitedKeys, InternalMessage, SendFileMessage, MetadataOptions, AuditableMetadata, GetMessagesOptions, AgreeToDisagreeMetadata } from "./types";
+import { AuditableChatStateMachine } from "./auditable_chat_state_machine";
 
 async function getAuditableChat(chatId: string, chatSeed: string, finishMessageId: string, initialGuess: number): Promise<WhatsappMessage[]> {
     let numMessagesToSearch = initialGuess;
@@ -62,9 +64,31 @@ async function getAuditableChat(chatId: string, chatSeed: string, finishMessageI
 export async function finishingAuditableChatRoutine(chatId: string, chatSeed: string, finishMessageId: string, initialGuess: number) {
     const auditableMessages = await getAuditableChat(chatId, chatSeed, finishMessageId, initialGuess);
     console.log("Auditable Messages: ", auditableMessages);
+    const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
+    const userId = await AuditableChatStateMachine.getUserId();
+    if (!userId) throw new Error("Couldnt find userID");
 
     const publicLogs = auditableMessages.map((message) => (message.metadata as AuditableMetadata)?.block as AuditableBlock);
-    const publicJson = JSON.stringify(publicLogs);
+    const ownPublicKey = await getPublicKey();
+    if (!ownPublicKey) throw new Error("Couldnt find own public key.");
+    const ownPublicKeyReadable = await crypto.subtle.exportKey('jwk', ownPublicKey);
+    const counterpartPublicKey = auditableState?.internalAuditableChatVariables?.counterpartPublicKey;
+    if (!counterpartPublicKey) throw new Error("Couldnt find counterpart public key.");
+    const publicKeys = {
+        [userId]: ownPublicKeyReadable,
+        [chatId]: counterpartPublicKey
+    };
+    if (!auditableState.internalAuditableChatVariables?.selfSignature) throw new Error("Own signature not found.");
+    if (!auditableState.internalAuditableChatVariables.counterpartSignature) throw new Error("Counterpart signature not found");
+    const lastSignatures = {
+        [userId]: auditableState.internalAuditableChatVariables.selfSignature,
+        [chatId]: auditableState.internalAuditableChatVariables.counterpartSignature
+    };
+    const publicJson = JSON.stringify({
+        logs: publicLogs,
+        lastSignatures,
+        publicKeys
+    });
 
     console.log("Public Logs: ", publicLogs);
     const counters = publicLogs.map((hashblock) => hashblock.counter);
@@ -90,7 +114,7 @@ export async function finishingAuditableChatRoutine(chatId: string, chatSeed: st
     });
     const privateJson = JSON.stringify({
         initialCommitedKey: commitedKeys[0],
-        logMessages: privateLogs.slice(1)
+        logs: privateLogs.slice(1)
     });
 
     const dateToday = new Date().toISOString().split('T')[0];
