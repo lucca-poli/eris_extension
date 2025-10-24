@@ -17,12 +17,9 @@ If you want to tweak the code a bit, run ```npm run dev``` and every time you sa
 If you want to test the 1x1 chat, try running 2 different browsers and loading the same compiled /dist for both of them.
 
 # Refinement Pool
-- Signatures
-    - quando atualizar as assinaturas: se eu enviar mensagem, atualizo a minha, se chegar ack atualizo a dele, se eu assinar a mensagem dele e mandar ack atualizar a minha
+- No features to be made by now.
 
 # Bugs
-- consertar o bug de se reiniciar a pagina dar BO
 - consertar o bug de poder aceitar uma requisição de uma conversa segura em outra
 - quando eu clico em um chat e a UI trava, não cai o evento de abrir um chat, dai se sair e entrar ficam dois botões porque recebe outro evento de abrir chat
-- desabilitar conversa segura para conversas com o próprio
 - tratar mensagens sem hash ou com hash errado e encerrar conversa do lado de quem recebeu os hashes errados
