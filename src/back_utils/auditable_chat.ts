@@ -2,6 +2,7 @@ import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine
 import {
     AgreeToDisagreeBlock,
     AgreeToDisagreeHashArgs,
+    AssymetricKeys,
     AuditableBlock,
     AuditableChatMetadata,
     AuditableMessageContent,
@@ -13,6 +14,114 @@ import {
     RandomSeedSalt
 } from "../utils/types";
 
+function orderedStringify(
+    value: AuditableBlock | AgreeToDisagreeBlock | Record<string, unknown> | unknown
+): string {
+    if (value === null || typeof value !== "object") {
+        return JSON.stringify(value);
+    }
+
+    if (Array.isArray(value)) {
+        return `[${value.map((v) => orderedStringify(v)).join(",")}]`;
+    }
+
+    const entries = Object.entries(value as Record<string, unknown>)
+        .filter(([_, v]) => v !== undefined) // omit undefined fields
+        .sort(([a], [b]) => a.localeCompare(b));
+
+    const body = entries
+        .map(([k, v]) => `${JSON.stringify(k)}:${orderedStringify(v)}`)
+        .join(",");
+
+    return `{${body}}`;
+}
+
+export async function generateSignature(privateKey: CryptoKey, block: AuditableBlock | AgreeToDisagreeBlock) {
+    const dataToEncode = orderedStringify(block);
+    const encoder = new TextEncoder();
+    const data = encoder.encode(dataToEncode);
+
+    // console.log("Generating signature.");
+    // console.log("Stringified data:", dataToEncode);
+    // console.log("Hash length:", data.length);
+
+    const signature = await crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        privateKey,
+        data
+    );
+    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+
+    return signatureB64;
+}
+
+export async function convertTextKey(key: JsonWebKey): Promise<CryptoKey> {
+    return crypto.subtle.importKey(
+        'jwk', key, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']
+    );
+
+}
+
+export async function verifySignature(publicKey: CryptoKey, signatureB64: string, block: AuditableBlock | AgreeToDisagreeBlock): Promise<boolean> {
+    const signature = new Uint8Array(atob(signatureB64).split("").map(c => c.charCodeAt(0)));
+    const dataToEncode = orderedStringify(block);
+    const encoder = new TextEncoder();
+    const data = encoder.encode(dataToEncode);
+
+    // console.log("Verifying signature.");
+    // console.log("Stringified data:", dataToEncode);
+    // console.log("Hash length:", data.length);
+
+    const isValid = await crypto.subtle.verify(
+        { name: "ECDSA", hash: "SHA-256" },
+        publicKey,
+        signature,
+        data
+    );
+
+    return isValid;
+}
+
+export async function generateKeys(): Promise<AssymetricKeys> {
+    const keyPair = await crypto.subtle.generateKey(
+        { name: 'ECDSA', namedCurve: 'P-256' },
+    /* extractable= */ true,
+        ['sign', 'verify']
+    );
+
+    const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+    const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+
+    const userKeys = {
+        publicKey: publicJwk,
+        privateKey: privateJwk
+    }
+
+    return userKeys
+}
+
+export async function getPublicKey(): Promise<CryptoKey | undefined> {
+    const publicJwk = (await chrome.storage.local.get(['PUBLIC_KEY']))['PUBLIC_KEY'] as JsonWebKey;
+    if (!publicJwk) return undefined;
+
+    const publicKey = await crypto.subtle.importKey(
+        'jwk', publicJwk, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']
+    );
+
+    return publicKey;
+}
+
+export async function getPrivateKey(): Promise<CryptoKey | undefined> {
+    const privateJwk = (await chrome.storage.local.get(['PRIVATE_KEY']))['PRIVATE_KEY'] as JsonWebKey;
+    if (!privateJwk) return undefined;
+
+    const privateKey = await crypto.subtle.importKey(
+        'jwk', privateJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']
+    );
+
+    return privateKey;
+}
+
 export async function assembleAgreeToDisagreeBlock(previousData: PreviousData, counter: number): Promise<AgreeToDisagreeBlock> {
     const sortedEntries = Array.from(previousData.entries()).sort((a, b) => a[0].localeCompare(b[0]));
     const sortedObject = Object.fromEntries(sortedEntries);
@@ -21,7 +130,7 @@ export async function assembleAgreeToDisagreeBlock(previousData: PreviousData, c
         previousData: sortedObject,
         counter,
     };
-    console.log("hashArgs: ", hashArgs);
+    // console.log("hashArgs: ", hashArgs);
     const newHash = await hashFunction(hashArgs);
 
     return {

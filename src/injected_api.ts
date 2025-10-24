@@ -24,6 +24,7 @@ WhatsappLayer.on('chat.new_message', async (chatMessage) => {
     if (!arrivedMessage.author) throw new Error(`New message has no author: ${arrivedMessage}`);
 
     const metadataIsAck = arrivedMessage.metadata?.kind === MetadataOptions.ACK;
+    if (metadataIsAck) console.log("Ack received: ", arrivedMessage);
 
     // Ignorar a mensagem se é um ACK na minha visão se fui eu que enviei
     if (metadataIsAck && chatMessage.id.fromMe) return;

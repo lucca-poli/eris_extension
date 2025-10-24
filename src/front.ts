@@ -256,7 +256,7 @@ class DomProcessor {
     }
 
     private setupAuditableSubtitle() {
-        const originalChatBox = document.querySelectorAll("div.x78zum5.x1q0g3np.x1iyjqo2.x6ikm8r.x10wlt62.x1jchvi3.xdod15v.x1wm35g.x1yc453h.xlyipyv.xuxw1ft.xh8yej3.x1s688f")[0]?.firstElementChild?.firstElementChild?.firstElementChild;
+        const originalChatBox = document.getElementById("main")?.querySelector('header')?.children[1].firstElementChild?.firstElementChild?.firstElementChild?.firstElementChild?.firstElementChild;
         if (typeof (originalChatBox?.innerHTML) !== "string") throw new Error("Chat title not found.");
         const newChatTitle = originalChatBox.innerHTML + DomProcessor.AUDITABLE_SUBTITLE;
         originalChatBox.innerHTML = newChatTitle;
@@ -288,10 +288,12 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const seed = metadataIsAuditable ?
         (whatsappMessage.metadata as AuditableMetadata).seed || oldState?.internalAuditableChatVariables?.auditableChatSeed :
         oldState?.internalAuditableChatVariables?.auditableChatSeed;
+    const counterpartPublicKey = metadataIsAuditable ? (whatsappMessage.metadata as AuditableMetadata).counterpartPublicKey : undefined;
     console.log("Seed is: ", seed);
     const newState = await AuditableChatStateMachine.updateState(chatId, whatsappMessage, {
         seed,
-        messageId: whatsappMessage.messageId
+        messageId: whatsappMessage.messageId,
+        publicKey: counterpartPublicKey
     });
     console.log("newState is: ", newState);
     currentAuditableChatId = chatId;
@@ -304,19 +306,16 @@ window.addEventListener("message", async (event: MessageEvent) => {
         domProcessorRepository.updateChatState(currentAuditableChat?.currentState, currentAuditableChatId);
     }
 
-    // Se a mensagem for de um chat auditavel eu mando pro back processar
-    const stateIsWaitingAck = newState.currentState === AuditableChatStates.WAITING_ACK;
-    const messageIsFromPartner = whatsappMessage.author === whatsappMessage.chatId;
-    const chatHasDisagree = stateIsWaitingAck && metadataIsAuditable && messageIsFromPartner;
-    if (!(metadataIsAuditable && !chatHasDisagree)) return;
-
     const oldStateIsRequest = (oldState?.currentState === AuditableChatStates.REQUEST_SENT) || (oldState?.currentState === AuditableChatStates.REQUEST_RECEIVED);
     const newStateIsAuditable = newState?.currentState === AuditableChatStates.ONGOING;
+    const isStartingMessage = (oldStateIsRequest && newStateIsAuditable) ? true : false;
+    const auditableMetadata = (whatsappMessage.metadata as AuditableMetadata);
+    if (isStartingMessage && !auditableMetadata.counterpartPublicKey) throw new Error("Starting message without counterpart public key.");
     chrome.runtime.sendMessage({
         action: ActionOptions.PROPAGATE_NEW_MESSAGE,
         payload: {
             whatsappMessage,
-            startingMessage: (oldStateIsRequest && newStateIsAuditable) ? true : false
+            startingMessage: isStartingMessage
         } as GenerateWhatsappMessage,
     } as InternalMessage);
 });

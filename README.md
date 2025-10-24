@@ -17,8 +17,8 @@ If you want to tweak the code a bit, run ```npm run dev``` and every time you sa
 If you want to test the 1x1 chat, try running 2 different browsers and loading the same compiled /dist for both of them.
 
 # Refinement Pool
-- AtD block
 - Signatures
+    - quando atualizar as assinaturas: se eu enviar mensagem, atualizo a minha, se chegar ack atualizo a dele, se eu assinar a mensagem dele e mandar ack atualizar a minha
 
 # Bugs
 - consertar o bug de se reiniciar a pagina dar BO

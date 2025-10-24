@@ -42,6 +42,11 @@ export type MessagesToDelete = {
     chatId: string;
 }
 
+export type AssymetricKeys = {
+    publicKey: JsonWebKey;
+    privateKey: JsonWebKey;
+}
+
 export type ChatState = {
     currentState: AuditableChatStates,
     internalAuditableChatVariables?: InternalAuditableChatVariables
@@ -49,9 +54,12 @@ export type ChatState = {
 
 export type InternalAuditableChatVariables = {
     auditableChatSeed: string;
+    counterpartPublicKey?: JsonWebKey;
     counter: number;
     previousHash: string;
     agreeToDisagreeAtempt?: AgreeToDisagreeMetadata;
+    selfSignature?: Signature;
+    counterpartSignature?: Signature;
 }
 
 export type SendFileMessage = {
@@ -91,7 +99,7 @@ export enum MetadataOptions {
 }
 
 export type AuditableMessageContent = {
-    content: string;
+    message: string;
     author: string;
 }
 
@@ -125,7 +133,16 @@ export type AgreeToDisagreeBlock = {
 export interface AuditableMetadata extends BaseMetadata {
     kind: MetadataOptions.AUDITABLE;
     block: AuditableBlock;
+    signature: string;
+    counterpartPublicKey?: JsonWebKey;
     seed?: string;
+    initialTimestamp?: string;
+}
+
+export type PrivateLog = {
+    commitedKey: string;
+    counter: number;
+    content: AuditableMessageContent | AuditableChatMetadata;
 }
 
 export type PreviousData = Map<string, PreviousBlockVerificationData>;
@@ -134,10 +151,18 @@ export interface AgreeToDisagreeMetadata extends BaseMetadata {
     kind: MetadataOptions.AGREE_TO_DISAGREE;
     block: AgreeToDisagreeBlock;
     disagreeRoot: WhatsappMessage;
+    signature: string;
 }
 
 export interface AckMetadata extends BaseMetadata {
     kind: MetadataOptions.ACK;
+    block: AuditableBlock | AgreeToDisagreeBlock;
+    signature: string;
+    counterpartPublicKey?: JsonWebKey;
+}
+
+export type Signature = {
+    signature: string;
     blockHash: string;
     counter: number;
 }

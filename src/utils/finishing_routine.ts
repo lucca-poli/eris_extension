@@ -1,5 +1,7 @@
+import { getPublicKey } from "../back_utils/auditable_chat";
 import { fetchLastMessagesFront } from "../core_utils/data_aquisition";
-import { ActionOptions, AuditableBlock, AuditableControlMessage, WhatsappMessage, GetCommitedKeys, InternalMessage, SendFileMessage, MetadataOptions, AuditableMetadata, GetMessagesOptions, AgreeToDisagreeMetadata } from "./types";
+import { ActionOptions, AuditableBlock, AuditableControlMessage, WhatsappMessage, GetCommitedKeys, InternalMessage, SendFileMessage, MetadataOptions, AuditableMetadata, GetMessagesOptions, AgreeToDisagreeMetadata, PrivateLog, AuditableMessageContent, AuditableChatMetadata } from "./types";
+import { AuditableChatStateMachine } from "./auditable_chat_state_machine";
 
 async function getAuditableChat(chatId: string, chatSeed: string, finishMessageId: string, initialGuess: number): Promise<WhatsappMessage[]> {
     let numMessagesToSearch = initialGuess;
@@ -62,9 +64,31 @@ async function getAuditableChat(chatId: string, chatSeed: string, finishMessageI
 export async function finishingAuditableChatRoutine(chatId: string, chatSeed: string, finishMessageId: string, initialGuess: number) {
     const auditableMessages = await getAuditableChat(chatId, chatSeed, finishMessageId, initialGuess);
     console.log("Auditable Messages: ", auditableMessages);
+    const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
+    const userId = await AuditableChatStateMachine.getUserId();
+    if (!userId) throw new Error("Couldnt find userID");
 
     const publicLogs = auditableMessages.map((message) => (message.metadata as AuditableMetadata)?.block as AuditableBlock);
-    const publicJson = JSON.stringify(publicLogs);
+    const ownPublicKey = await getPublicKey();
+    if (!ownPublicKey) throw new Error("Couldnt find own public key.");
+    const ownPublicKeyReadable = await crypto.subtle.exportKey('jwk', ownPublicKey);
+    const counterpartPublicKey = auditableState?.internalAuditableChatVariables?.counterpartPublicKey;
+    if (!counterpartPublicKey) throw new Error("Couldnt find counterpart public key.");
+    const publicKeys = {
+        [userId]: ownPublicKeyReadable,
+        [chatId]: counterpartPublicKey
+    };
+    if (!auditableState.internalAuditableChatVariables?.selfSignature) throw new Error("Own signature not found.");
+    if (!auditableState.internalAuditableChatVariables.counterpartSignature) throw new Error("Counterpart signature not found");
+    const lastSignatures = {
+        [userId]: auditableState.internalAuditableChatVariables.selfSignature,
+        [chatId]: auditableState.internalAuditableChatVariables.counterpartSignature
+    };
+    const publicJson = JSON.stringify({
+        logs: publicLogs,
+        lastSignatures,
+        publicKeys
+    });
 
     console.log("Public Logs: ", publicLogs);
     const counters = publicLogs.map((hashblock) => hashblock.counter);
@@ -75,26 +99,39 @@ export async function finishingAuditableChatRoutine(chatId: string, chatSeed: st
     } as InternalMessage);
     console.log("commited keys: ", commitedKeys)
 
-    const privateLogs = auditableMessages.map((message, index) => {
+    const initialHash = "0000000000000000000000000000000000000000000000000000000000000000";
+    const initialBlock = auditableMessages.filter((auditableMessage) => (auditableMessage.metadata as AuditableMetadata).block.previousHash === initialHash);
+    if (initialBlock.length !== 1) throw new Error("There should be only one initial block.");
+    const initialTimestamp = (initialBlock[0].metadata as AuditableMetadata).initialTimestamp;
+    if (!initialTimestamp) throw new Error("No initial timestamp found in initial block.");
+    const initialLog: PrivateLog[] = [{
+        content: { timestamp: initialTimestamp } as AuditableChatMetadata,
+        commitedKey: commitedKeys[0],
+        counter: 0
+    }];
+    const privateLogs: PrivateLog[] = auditableMessages.map((message, index) => {
         const commitedKey = commitedKeys[index]
         if (!commitedKey) {
             console.error(message);
             throw new Error("No counter for HashBlock.");
         }
-        return {
-            content: message.content as string,
+        const content: AuditableMessageContent = {
+            message: message.content as string,
             author: message.author,
+        };
+        return {
             commitedKey,
-            counter: counters[index]
+            counter: counters[index],
+            content
         };
     });
+
+
     const privateJson = JSON.stringify({
-        initialCommitedKey: commitedKeys[0],
-        logMessages: privateLogs.slice(1)
+        logs: initialLog.concat(privateLogs.slice(1))
     });
 
-    const dateToday = new Date().toISOString().split('T')[0];
-
+    const dateToday = new Date().toISOString();
     await chrome.runtime.sendMessage({
         action: ActionOptions.SEND_FILE_MESSAGE,
         payload: {
