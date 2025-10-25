@@ -42,25 +42,64 @@ function sendWhatsappMessage(chatBox, message) {
     }));
 }
 
-function benchmark() {
-    'use strict';
+function generateRandomMessage() {
+    // Generate random length between 1 and 100
+    const length = Math.floor(Math.random() * 100) + 1;
 
-    console.log('Collection initialized!');
+    // Alphanumeric characters and space
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ';
+    const charsWithoutSpace = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+    if (length === 1) {
+        // Single character cannot be a space
+        return charsWithoutSpace[Math.floor(Math.random() * charsWithoutSpace.length)];
+    }
+
+    let message = '';
+
+    // First character (cannot be space)
+    message += charsWithoutSpace[Math.floor(Math.random() * charsWithoutSpace.length)];
+
+    // Middle characters (can be anything)
+    for (let i = 1; i < length - 1; i++) {
+        message += chars[Math.floor(Math.random() * chars.length)];
+    }
+
+    // Last character (cannot be space)
+    message += charsWithoutSpace[Math.floor(Math.random() * charsWithoutSpace.length)];
+
+    return message;
+}
+
+/** @param {number} quantity  **/
+function sendMessages(quantity) {
+    const TIME_BETWEEN_MESSAGES_MILISECONDS = 5000;
 
     const textBox = window.document.querySelectorAll(".selectable-text.copyable-text.x15bjb6t.x1n2onr6")[1];
     if (textBox) console.log("Chat box found.");
 
-    // Sending message
-    const message = "batata";
-    sendWhatsappMessage(textBox, message);
+    for (let i = 0; i < quantity; i++) {
+        setTimeout(() => {
+            // Sending message
+            const message = generateRandomMessage();
+            sendWhatsappMessage(textBox, message);
+        }, i * TIME_BETWEEN_MESSAGES_MILISECONDS);
+    }
+
+    console.log("Done sending messages.");
+}
+
+/** @param {number} quantity  **/
+window.init_collection = function(quantity) {
+    'use strict';
+
+    console.log('Collection initialized!');
+
+    sendMessages(quantity);
 
     /** @type {WPP} **/
     const WhatsappLayer = window.WPP;
 
-}
-
-window.init_collection = function() {
-    benchmark();
 };
 
 // WhatsappLayer.on("chat.msg_ack_change", (obj) => console.log("Receiving changes: ", obj));
