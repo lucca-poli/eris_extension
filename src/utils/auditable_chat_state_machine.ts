@@ -419,7 +419,7 @@ export class AuditableChatStateMachine {
     }
 
     static async setAuditableChat(chatId: string, state: ChatState): Promise<void> {
-        console.log("Trying to set new state: ", state);
+        // console.log("Trying to set new state: ", state);
         const chats = await this.getAll();
         chats[chatId] = state;
         return new Promise((resolve) => {

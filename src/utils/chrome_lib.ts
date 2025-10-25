@@ -60,7 +60,9 @@ export async function deleteMessage(tabId: number, chatId: string, messageId: st
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
 
-            WhatsappLayer.chat.deleteMessage(chatId, messageId).then((deleteReturn) => console.log("Message deleted: ", deleteReturn)).catch((error) => console.log("error in deletion: ", error));
+            WhatsappLayer.chat.deleteMessage(chatId, messageId)
+                // .then((deleteReturn) => console.log("Message deleted: ", deleteReturn))
+                .catch((error) => console.log("error in deletion: ", error));
         },
         args: [chatId, messageId],
         target: { tabId },
