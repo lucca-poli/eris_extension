@@ -79,16 +79,16 @@ export class AuditableChatStateMachine {
         const userId = await AuditableChatStateMachine.getUserId();
         if (!userId) throw new Error("User number not found");
 
-        console.log("incomingMessage: ", incomingMessage);
+        // console.log("incomingMessage: ", incomingMessage);
         const metadataIsAck = incomingMessage.metadata?.kind === MetadataOptions.ACK;
-        console.log("Is ack: ", metadataIsAck);
+        // console.log("Is ack: ", metadataIsAck);
         const metadataIsAuditable = incomingMessage.metadata?.kind === MetadataOptions.AUDITABLE;
-        console.log("Is auditableMessage: ", metadataIsAuditable);
+        // console.log("Is auditableMessage: ", metadataIsAuditable);
         const metadataIsAgreeToDisagree = incomingMessage.metadata?.kind === MetadataOptions.AGREE_TO_DISAGREE;
-        console.log("Is agreeToDisagree: ", metadataIsAgreeToDisagree);
+        // console.log("Is agreeToDisagree: ", metadataIsAgreeToDisagree);
         const messageIsOfExpectedType = metadataIsAuditable || metadataIsAck || metadataIsAgreeToDisagree;
         const agreeToDisagreeAtempt = internalVariables?.agreeToDisagreeAtempt;
-        console.log("internal AtD: ", agreeToDisagreeAtempt)
+        // console.log("internal AtD: ", agreeToDisagreeAtempt)
 
         switch (auditableChat.getCurrentState()) {
             case AuditableChatStates.IDLE:
@@ -344,8 +344,8 @@ export class AuditableChatStateMachine {
                 }
                 if (!metadataIsAck) break;
                 const ack = incomingMessage.metadata as AckMetadata;
-                console.log("Ack received!", ack);
-                console.log("internal state: ", internalVariables);
+                // console.log("Ack received!", ack);
+                // console.log("internal state: ", internalVariables);
                 const internalCounter = internalVariables?.counter;
                 if (!internalCounter) throw new Error("No internal counter present.");
                 const internalCounterOffset = 1;
@@ -364,7 +364,7 @@ export class AuditableChatStateMachine {
             internalAuditableChatVariables: internalVariables,
             currentState: auditableChat.getCurrentState(),
         };
-        console.log("State defined in transition: ", newChatState);
+        // console.log("State defined in transition: ", newChatState);
         await AuditableChatStateMachine.setAuditableChat(chatId, newChatState);
         return newChatState;
     }

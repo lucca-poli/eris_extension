@@ -63,7 +63,7 @@ async function getAuditableChat(chatId: string, chatSeed: string, finishMessageI
 
 export async function finishingAuditableChatRoutine(chatId: string, chatSeed: string, finishMessageId: string, initialGuess: number) {
     const auditableMessages = await getAuditableChat(chatId, chatSeed, finishMessageId, initialGuess);
-    console.log("Auditable Messages: ", auditableMessages);
+    // console.log("Auditable Messages: ", auditableMessages);
     const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
     const userId = await AuditableChatStateMachine.getUserId();
     if (!userId) throw new Error("Couldnt find userID");
@@ -90,14 +90,14 @@ export async function finishingAuditableChatRoutine(chatId: string, chatSeed: st
         publicKeys
     });
 
-    console.log("Public Logs: ", publicLogs);
+    // console.log("Public Logs: ", publicLogs);
     const counters = publicLogs.map((hashblock) => hashblock.counter);
-    console.log("counters: ", counters);
+    // console.log("counters: ", counters);
     const commitedKeys: string[] = await chrome.runtime.sendMessage({
         action: ActionOptions.GET_COMMITED_KEYS,
         payload: { counters, seed: chatSeed } as GetCommitedKeys
     } as InternalMessage);
-    console.log("commited keys: ", commitedKeys)
+    // console.log("commited keys: ", commitedKeys)
 
     const initialHash = "0000000000000000000000000000000000000000000000000000000000000000";
     const initialBlock = auditableMessages.filter((auditableMessage) => (auditableMessage.metadata as AuditableMetadata).block.previousHash === initialHash);

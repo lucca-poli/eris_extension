@@ -282,22 +282,22 @@ window.addEventListener("message", async (event: MessageEvent) => {
     const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
     const { chatId } = whatsappMessage;
     const oldState = await AuditableChatStateMachine.getAuditableChat(chatId);
-    console.log("oldState is: ", oldState);
+    // console.log("oldState is: ", oldState);
 
     // Manage AuditableChats state
     const seed = metadataIsAuditable ?
         (whatsappMessage.metadata as AuditableMetadata).seed || oldState?.internalAuditableChatVariables?.auditableChatSeed :
         oldState?.internalAuditableChatVariables?.auditableChatSeed;
     const counterpartPublicKey = metadataIsAuditable ? (whatsappMessage.metadata as AuditableMetadata).counterpartPublicKey : undefined;
-    console.log("Seed is: ", seed);
+    // console.log("Seed is: ", seed);
     const newState = await AuditableChatStateMachine.updateState(chatId, whatsappMessage, {
         seed,
         messageId: whatsappMessage.messageId,
         publicKey: counterpartPublicKey
     });
-    console.log("newState is: ", newState);
+    // console.log("newState is: ", newState);
     currentAuditableChatId = chatId;
-    console.log("newState really is: ", await AuditableChatStateMachine.getAuditableChat(chatId));
+    // console.log("newState really is: ", await AuditableChatStateMachine.getAuditableChat(chatId));
 
     // Update DOM
     if (currentAuditableChatId === chatId) {
