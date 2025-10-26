@@ -14,6 +14,7 @@ import WPP from "@wppconnect/wa-js";
      * @typedef {Object} MessageMetadata
      * @property {string} id - Id of the message
      * @property {string} [content] - Text content of the message
+     * @property {string} [hash] - Hash of the corresponding block
      * @property {number} [ack0] - Time in which the message was sent in Unix Timestamp for status 0
      * @property {number} [ack1] - Time in which the message was sent in Unix Timestamp for status 1
      * @property {number} [ack2] - Time in which the message was sent in Unix Timestamp for status 2
@@ -26,6 +27,180 @@ import WPP from "@wppconnect/wa-js";
      * @property {number} time - Time when the data was sampled
      * @property {number} memory - Memory in bytes read from Whatsapp Web WebSocket
 */
+
+const TIME_BETWEEN_MESSAGES_MILISECONDS = 5000;
+const TIME_DIFFERENCE_FROM_MEASUREMENT = 2000;
+
+/** @type {IDBDatabase} **/
+let db;
+/** @type {boolean[]} **/
+let dbReadyReference = [false];
+
+// Initialize IndexedDB
+const dbRequest = indexedDB.open('WhatsAppDataCollector', 1);
+
+dbRequest.onerror = function(e) {
+    console.error('[DB] Error opening database:', e);
+};
+
+dbRequest.onupgradeneeded = function() {
+    db = dbRequest.result;
+    const store = db.createObjectStore('messages', { keyPath: 'id' });
+    console.log('[DB] Database created/upgraded');
+};
+
+dbRequest.onsuccess = function() {
+    db = dbRequest.result;
+    dbReadyReference[0] = true;
+    console.log('[DB] Database ready');
+};
+
+/** @type {SocketData[]} **/
+const receivedSocketData = [];
+/** @type {SocketData[]} **/
+const sentSocketData = [];
+/** @type {boolean} **/
+let collectionRunning = false;
+// console.log('[Monitor] Starting WebSocket monitor...');
+
+// Hook send on prototype
+const originalSend = WebSocket.prototype.send;
+WebSocket.prototype.send = function(socketData) {
+    const size = socketData?.byteLength || socketData?.size || socketData?.length || 0;
+    /** @type SocketData **/
+    const newSocketData = {
+        memory: size,
+        time: Date.now()
+    }
+    if (collectionRunning) sentSocketData.push(newSocketData);
+    // console.log('[SENT]: ', sentSocketData);
+    return originalSend.apply(this, arguments);
+};
+
+// Hook onmessage property descriptor
+const originalDescriptor = Object.getOwnPropertyDescriptor(WebSocket.prototype, 'onmessage');
+
+Object.defineProperty(WebSocket.prototype, 'onmessage', {
+    set: function(handler) {
+        // console.log('[Monitor] onmessage setter called');
+
+        if (!handler) {
+            return originalDescriptor.set.call(this, handler);
+        }
+
+        const wrappedHandler = function(event) {
+            const size = event.data?.byteLength || event.data?.size || event.data?.length || 0;
+            /** @type SocketData **/
+            const newSocketData = {
+                memory: size,
+                time: Date.now()
+            }
+            if (collectionRunning) receivedSocketData.push(newSocketData);
+            // console.log('[RECEIVED in queue]: ', receivedSocketData);
+            return handler.apply(this, arguments);
+        };
+
+        return originalDescriptor.set.call(this, wrappedHandler);
+    },
+    get: function() {
+        return originalDescriptor.get.call(this);
+    }
+});
+
+/** @type {WPP} **/
+const WhatsappLayer = window.WPP;
+
+WhatsappLayer.on("chat.new_message", async (whatsappMessage) => {
+    // console.log("Incoming message: ", whatsappMessage);
+    const content = whatsappMessage.body;
+    const status = whatsappMessage.ack
+    const time = Date.now();
+    const chatId = whatsappMessage.id?.remote?._serialized;
+    const author = whatsappMessage.from?._serialized;
+    if (content === undefined) {
+        console.error("No text content present in message.");
+        console.log(whatsappMessage);
+    }
+    if (status === undefined) {
+        console.error("No status present in message.");
+        console.log(whatsappMessage);
+    }
+    if (chatId === undefined) {
+        console.error("No chatId present in message.");
+        console.log(whatsappMessage);
+    }
+    if (author === undefined) {
+        console.error("No author present in message.");
+        console.log(whatsappMessage);
+    }
+
+    const metadataString = whatsappMessage.description;
+    const metadata = JSON.parse(metadataString);
+    const hash = metadata.block.hash;
+    if (!hash) throw new Error("Couldnt find block hash.");
+
+    /** @type {MessageMetadata} **/
+    let whatsappData;
+    if (status === 0) {
+        await new Promise(resolve => setTimeout(resolve, TIME_DIFFERENCE_FROM_MEASUREMENT));
+        // console.log('[SENT]: ', sentSocketData);
+        const memory = findClosestSocketData(time, sentSocketData, TIME_DIFFERENCE_FROM_MEASUREMENT, "sent");
+        whatsappData = {
+            id: whatsappMessage.id.id,
+            content,
+            ack0: time,
+            memory,
+            hash
+        };
+    } else if (status === 1) {
+        await new Promise(resolve => setTimeout(resolve, TIME_DIFFERENCE_FROM_MEASUREMENT));
+        // console.log('[RECEIVED]: ', receivedSocketData);
+        const memory = findClosestSocketData(time, receivedSocketData, TIME_DIFFERENCE_FROM_MEASUREMENT, "received");
+        const ackControlMessage = "[Control Message]\nConfirmation ACK sent.";
+        if (content !== ackControlMessage) throw new Error("Status should be 1 for received messages.");
+        whatsappData = {
+            id: whatsappMessage.id.id,
+            content,
+            ack1: time,
+            memory,
+            hash
+        };
+    } else {
+        throw new Error("There should only be 0 or 1 for new messages.");
+    }
+    create(db, whatsappData).catch((e) => console.log("Error in new message creation: ", e));
+});
+WhatsappLayer.on("chat.msg_ack_change", (statusChange) => {
+    const status = statusChange.ack
+    const time = Date.now();
+    if (status === undefined) {
+        console.error("No status present in message.");
+        console.log(statusChange);
+    }
+    for (const id of statusChange.ids) {
+        /** @type {MessageMetadata} **/
+        let whatsappData;
+        if (status === 1) {
+            whatsappData = {
+                id: id.id,
+                ack1: time
+            };
+        } else if (status === 2) {
+            whatsappData = {
+                id: id.id,
+                ack2: time
+            };
+        } else if (status === 3) {
+            whatsappData = {
+                id: id.id,
+                ack3: time
+            };
+        } else {
+            throw new Error("There should only be 1, 2 or 3 for updated messages.");
+        }
+        update(db, whatsappData).catch((e) => console.log("Error in new message update: ", e, " status is ", status));
+    }
+});
 
 /**
  * @param {Element} chatBox 
@@ -89,143 +264,89 @@ function generateRandomMessage() {
 }
 
 /** @param {number} quantity  **/
-function sendMessages(quantity) {
-    const TIME_BETWEEN_MESSAGES_MILISECONDS = 5000;
-
+/** @param {number} betweenTime  **/
+/** @returns {Promise[]} quantity  **/
+function sendMessages(quantity, betweenTime) {
     const textBox = window.document.querySelectorAll(".selectable-text.copyable-text.x15bjb6t.x1n2onr6")[1];
-    if (textBox) console.log("Chat box found.");
+    // if (textBox) console.log("Chat box found.");
+
+    const promises = [];
 
     for (let i = 0; i < quantity; i++) {
-        setTimeout(() => {
-            // Sending message
-            const message = generateRandomMessage();
-            sendWhatsappMessage(textBox, message);
-        }, i * TIME_BETWEEN_MESSAGES_MILISECONDS);
+        const promise = new Promise((resolve) => {
+            setTimeout(() => {
+                // Sending message
+                const message = generateRandomMessage();
+                sendWhatsappMessage(textBox, message);
+                resolve();
+            }, i * betweenTime);
+        });
+        promises.push(promise);
     }
 
-    console.log("Done sending messages.");
+    return promises;
+}
+
+/**
+ * @param {number} time 
+ * @param {SocketData[]} SocketDataArray 
+ * @param {number} TIME_DIFFERENCE_FROM_MEASUREMENT 
+ * @param {"sent" | "received"} direction 
+ * @returns {number} Returns the memory and also prunes the array from the beggining to the returned time
+**/
+function findClosestSocketData(time, SocketDataArray, TIME_DIFFERENCE_FROM_MEASUREMENT, direction) {
+    const directionOperator = direction === "sent" ? 1 : -1;
+    const memoriesWithinRange = SocketDataArray
+        .filter((data) => {
+            const difference = (data.time - time) * directionOperator;
+            return difference < TIME_DIFFERENCE_FROM_MEASUREMENT && difference > 0;
+        })
+        .map((data) => data.memory);
+    console.log("Memories collected: ", memoriesWithinRange, " at time ", time);
+    const maximalEstimate = Math.max(...memoriesWithinRange);
+
+    // Pruning the array - find index to keep from
+    const cutoffTime = time;
+    const indexToKeep = SocketDataArray.findIndex((data) => data.time >= cutoffTime);
+
+    // Remove everything before that index
+    if (indexToKeep > 0) {
+        SocketDataArray.splice(0, indexToKeep);
+    } else if (indexToKeep === -1) {
+        // If no elements match, clear entire array
+        SocketDataArray.splice(0, SocketDataArray.length);
+    }
+
+    // console.log("New socket array is: ", SocketDataArray);
+    return maximalEstimate;
 }
 
 /** @param {number} quantity  **/
 window.init_collection = async function(quantity) {
     'use strict';
+    collectionRunning = true;
 
-    /** @type {IDBDatabase} **/
-    let db;
-    /** @type {boolean[]} **/
-    let dbReadyReference = [false];
-
-    // Initialize IndexedDB
-    const dbRequest = indexedDB.open('WhatsAppDataCollector', 1);
-
-    dbRequest.onerror = function(e) {
-        console.error('[DB] Error opening database:', e);
-    };
-
-    dbRequest.onupgradeneeded = function() {
-        db = dbRequest.result;
-        const store = db.createObjectStore('messages', { keyPath: 'id' });
-        console.log('[DB] Database created/upgraded');
-    };
-
-    dbRequest.onsuccess = function() {
-        db = dbRequest.result;
-        dbReadyReference[0] = true;
-        console.log('[DB] Database ready');
-        console.log("Trying to inject dummy data 1");
-    };
     await waitForDB(dbReadyReference);
 
-    console.log("Setting up listeners.");
+    // console.log("Setting up listeners.");
     // Primeiro ouvir os sockets e armazenar 2 arrays de objetos que contem o tempo e a memoria
-    /** @type {SocketData[]} **/
-    const receivedSocketData = [];
-    /** @type {SocketData[]} **/
-    const sentSocketData = [];
-    console.log('[Monitor] Starting WebSocket monitor...');
 
-    // Hook send on prototype
-    const originalSend = WebSocket.prototype.send;
-    WebSocket.prototype.send = function(socketData) {
-        const size = socketData?.byteLength || socketData?.size || socketData?.length || 0;
-        /** @type SocketData **/
-        const newSocketData = {
-            memory: size,
-            time: Date.now()
-        }
-        sentSocketData.push(newSocketData);
-        console.log('[SENT]: ', sentSocketData);
-        return originalSend.apply(this, arguments);
-    };
-
-    // Hook addEventListener on prototype
-    const originalAddEventListener = EventTarget.prototype.addEventListener;
-    EventTarget.prototype.addEventListener = function(type, handler, ...args) {
-        if (this instanceof WebSocket && type === 'message') {
-            const wrappedHandler = function(event) {
-                const size = event.data?.byteLength || event.data?.size || event.data?.length || 0;
-                /** @type SocketData **/
-                const newSocketData = {
-                    memory: size,
-                    time: Date.now()
-                }
-                receivedSocketData.push(newSocketData);
-                console.log('[RECEIVED1]: ', receivedSocketData);
-                return handler.apply(this, arguments);
-            };
-            return originalAddEventListener.call(this, type, wrappedHandler, ...args);
-        }
-        return originalAddEventListener.apply(this, arguments);
-    };
-
-    // Hook onmessage property descriptor
-    const originalDescriptor = Object.getOwnPropertyDescriptor(WebSocket.prototype, 'onmessage');
-
-    Object.defineProperty(WebSocket.prototype, 'onmessage', {
-        set: function(handler) {
-            console.log('[Monitor] onmessage setter called');
-
-            if (!handler) {
-                return originalDescriptor.set.call(this, handler);
-            }
-
-            const wrappedHandler = function(event) {
-                const size = event.data?.byteLength || event.data?.size || event.data?.length || 0;
-                /** @type SocketData **/
-                const newSocketData = {
-                    memory: size,
-                    time: Date.now()
-                }
-                receivedSocketData.push(newSocketData);
-                console.log('[RECEIVED2]: ', receivedSocketData);
-                return handler.apply(this, arguments);
-            };
-
-            return originalDescriptor.set.call(this, wrappedHandler);
-        },
-        get: function() {
-            return originalDescriptor.get.call(this);
-        }
-    });
-
-    console.log('[Monitor] All hooks installed');
+    // console.log('[Monitor] All hooks installed');
 
     console.log('Collection initialized!');
 
-    sendMessages(quantity);
+    const sentResult = sendMessages(quantity, TIME_BETWEEN_MESSAGES_MILISECONDS);
 
-    /** @type {WPP} **/
-    const WhatsappLayer = window.WPP;
 
-    /** @type {MessageMetadata} **/
-    const dummyData = {
-        id: "djwaoidjow",
-        content: "oi galera!!"
-    };
-    console.log("Trying to inject dummy data 2");
-    create(db, dummyData).catch((e) => console.log("Error: ", e));
-
+    // Need to wait all sent messages to arrive
+    await Promise.all(sentResult);
+    // Wait a bit more just to capture the final ack
+    await new Promise(resolve => setTimeout(resolve, TIME_BETWEEN_MESSAGES_MILISECONDS * 5));
+    console.log("Done sending messages.");
+    // Forcefully await 5 more seconds
     await exportToCSV(db);
+    await deleteAllMessages(db);
+    collectionRunning = false;
 };
 
 /**
@@ -398,6 +519,34 @@ function deleteMessage(db, id) {
 }
 
 /**
+ * Deletes all messages from the database
+ * @param {IDBDatabase} db 
+ * @returns {Promise<void>}
+ */
+function deleteAllMessages(db) {
+    return new Promise((resolve, reject) => {
+        if (!db) {
+            reject(new Error('Database not ready'));
+            return;
+        }
+
+        const transaction = db.transaction(['messages'], 'readwrite');
+        const store = transaction.objectStore('messages');
+        const request = store.clear();
+
+        request.onsuccess = function() {
+            console.log('[DB] All messages deleted');
+            resolve();
+        };
+
+        request.onerror = function(e) {
+            console.error('[DB] Error deleting all messages:', e);
+            reject(e);
+        };
+    });
+}
+
+/**
     * Exports all messages to CSV
     * @param {IDBDatabase} db
     * @returns {Promise<void>}
@@ -423,7 +572,7 @@ function exportToCSV(db) {
             }
 
             // Define column order
-            const headers = ['id', 'content', 'ack0', 'ack1', 'ack2', 'ack3', 'memory'];
+            const headers = ['id', 'hash', 'content', 'ack0', 'ack1', 'ack2', 'ack3', 'memory'];
 
             // Build CSV
             const csvRows = [];
@@ -463,19 +612,3 @@ function exportToCSV(db) {
         };
     });
 };
-
-// WhatsappLayer.on("chat.msg_ack_change", (obj) => console.log("Receiving changes: ", obj));
-// WhatsappLayer.on("chat.new_message", (obj) => console.log("New message: ", obj));
-//
-// WhatsappLayer.on("chat.msg_ack_change", (obj) => {
-//     console.log("Message update.");
-//     console.log("Message id: ", obj.ids.map((id) => id.id));
-//     console.log("Ack of the change: ", obj.ack);
-//     console.log("Time of the change: ", new Date().toISOString());
-// });
-// WhatsappLayer.on("chat.new_message", (obj) => {
-//     console.log("Message received.");
-//     console.log("Message id: ", obj.id.id);
-//     console.log("Ack of the message: ", obj.ack);
-//     console.log("Time of the message: ", new Date().toISOString());
-// });
