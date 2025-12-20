@@ -2,6 +2,7 @@ import { getPublicKey } from "../back_utils/auditable_chat";
 import { fetchLastMessagesFront } from "../core_utils/data_aquisition";
 import { ActionOptions, AuditableBlock, AuditableControlMessage, WhatsappMessage, GetCommitedKeys, InternalMessage, SendFileMessage, MetadataOptions, AuditableMetadata, GetMessagesOptions, AgreeToDisagreeMetadata, PrivateLog, AuditableMessageContent, AuditableChatMetadata } from "./types";
 import { AuditableChatStateMachine } from "./auditable_chat_state_machine";
+import { logger } from "../core_utils/logger";
 
 async function getAuditableChat(chatId: string, chatSeed: string, finishMessageId: string, initialGuess: number): Promise<WhatsappMessage[]> {
     let numMessagesToSearch = initialGuess;
@@ -63,6 +64,7 @@ async function getAuditableChat(chatId: string, chatSeed: string, finishMessageI
 
 export async function finishingAuditableChatRoutine(chatId: string, chatSeed: string, finishMessageId: string, initialGuess: number) {
     const auditableMessages = await getAuditableChat(chatId, chatSeed, finishMessageId, initialGuess);
+    // put in DEBUG
     // console.log("Auditable Messages: ", auditableMessages);
     const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
     const userId = await AuditableChatStateMachine.getUserId();
@@ -90,14 +92,13 @@ export async function finishingAuditableChatRoutine(chatId: string, chatSeed: st
         publicKeys
     });
 
+    // put in DEBUG
     // console.log("Public Logs: ", publicLogs);
     const counters = publicLogs.map((hashblock) => hashblock.counter);
-    // console.log("counters: ", counters);
     const commitedKeys: string[] = await chrome.runtime.sendMessage({
         action: ActionOptions.GET_COMMITED_KEYS,
         payload: { counters, seed: chatSeed } as GetCommitedKeys
     } as InternalMessage);
-    // console.log("commited keys: ", commitedKeys)
 
     const initialHash = "0000000000000000000000000000000000000000000000000000000000000000";
     const initialBlock = auditableMessages.filter((auditableMessage) => (auditableMessage.metadata as AuditableMetadata).block.previousHash === initialHash);
@@ -112,7 +113,7 @@ export async function finishingAuditableChatRoutine(chatId: string, chatSeed: st
     const privateLogs: PrivateLog[] = auditableMessages.map((message, index) => {
         const commitedKey = commitedKeys[index]
         if (!commitedKey) {
-            console.error(message);
+            logger.error(message);
             throw new Error("No counter for HashBlock.");
         }
         const content: AuditableMessageContent = {

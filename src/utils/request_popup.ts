@@ -138,7 +138,8 @@ export async function displayRequestWindow(chatId: string) {
                 author: await AuditableChatStateMachine.getUserId()
             } as WhatsappMessage
         } as InternalMessage);
-        console.log('Secure chat requested!');
+        // put in DEBUG
+        // console.log('Secure chat requested!');
         floatWindow.remove();
     });
 

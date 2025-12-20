@@ -12,8 +12,9 @@ import WPP from "@wppconnect/wa-js";
 
 /**
      * @typedef {Object} MessageMetadata
-     * @property {string} id - Id of the message
      * @property {string} [content] - Text content of the message
+     * @property {number} [ackpre] - Time in which space was pressed to send the message in Unix Timestamp
+     * @property {string} [id] - Id of the message
      * @property {string} [hash] - Hash of the corresponding block
      * @property {number} [ack0] - Time in which the message was sent in Unix Timestamp for status 0
      * @property {number} [ack1] - Time in which the message was sent in Unix Timestamp for status 1
@@ -28,8 +29,9 @@ import WPP from "@wppconnect/wa-js";
      * @property {number} memory - Memory in bytes read from Whatsapp Web WebSocket
 */
 
-const TIME_BETWEEN_MESSAGES_MILISECONDS = 5000;
+const TIME_BETWEEN_MESSAGES_MILISECONDS = 10000;
 const TIME_DIFFERENCE_FROM_MEASUREMENT = 2000;
+const TEST_MESSAGES = [];
 
 /** @type {IDBDatabase} **/
 let db;
@@ -59,6 +61,8 @@ dbRequest.onsuccess = function() {
 const receivedSocketData = [];
 /** @type {SocketData[]} **/
 const sentSocketData = [];
+/** @type {Map<string, MessageMetadata>} **/
+const preAcks = new Map([]);
 /** @type {boolean} **/
 let collectionRunning = false;
 // console.log('[Monitor] Starting WebSocket monitor...');
@@ -134,23 +138,31 @@ WhatsappLayer.on("chat.new_message", async (whatsappMessage) => {
         console.log(whatsappMessage);
     }
 
-    const metadataString = whatsappMessage.description;
-    const metadata = JSON.parse(metadataString);
-    const hash = metadata.block.hash;
-    if (!hash) throw new Error("Couldnt find block hash.");
+    // const metadataString = whatsappMessage.description;
+    // const metadata = JSON.parse(metadataString);
+    // const hash = metadata.block.hash;
+    // if (!hash) throw new Error("Couldnt find block hash.");
 
-    /** @type {MessageMetadata} **/
     let whatsappData;
+    /** @type {MessageMetadata} **/
     if (status === 0) {
         await new Promise(resolve => setTimeout(resolve, TIME_DIFFERENCE_FROM_MEASUREMENT));
         // console.log('[SENT]: ', sentSocketData);
         const memory = findClosestSocketData(time, sentSocketData, TIME_DIFFERENCE_FROM_MEASUREMENT, "sent");
+        const ackpre = preAcks.get(content)?.ackpre;
+        if (ackpre) preAcks.delete(content);
+        else {
+            console.error("Couldnt find ackpre with content ", content);
+            throw new Error("Couldnt find ackpre.");
+        }
+
         whatsappData = {
             id: whatsappMessage.id.id,
             content,
             ack0: time,
+            ackpre,
             memory,
-            hash
+            // hash
         };
     } else if (status === 1) {
         await new Promise(resolve => setTimeout(resolve, TIME_DIFFERENCE_FROM_MEASUREMENT));
@@ -163,7 +175,7 @@ WhatsappLayer.on("chat.new_message", async (whatsappMessage) => {
             content,
             ack1: time,
             memory,
-            hash
+            // hash
         };
     } else {
         throw new Error("There should only be 0 or 1 for new messages.");
@@ -234,10 +246,21 @@ function sendWhatsappMessage(chatBox, message) {
     }));
 }
 
-function generateRandomMessage() {
-    // Generate random length between 1 and 100
-    const length = Math.floor(Math.random() * 100) + 1;
+/**
+ * @param {string} message 
+**/
+function sendMessageToWhatsapp(message) {
+    /** @type {WPP} **/
+    const WhatsappLayer = window.WPP;
 
+    const chatIdMocked = "5513991174080@c.us";
+    WhatsappLayer.chat.sendTextMessage(chatIdMocked, message);
+}
+
+/**
+ * @param {number} length 
+**/
+function generateRandomMessage(length) {
     // Alphanumeric characters and space
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ';
     const charsWithoutSpace = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -276,8 +299,21 @@ function sendMessages(quantity, betweenTime) {
         const promise = new Promise((resolve) => {
             setTimeout(() => {
                 // Sending message
-                const message = generateRandomMessage();
-                sendWhatsappMessage(textBox, message);
+                // const length = 4 ** 4;
+                // const message = generateRandomMessage(length);
+                const message = TEST_MESSAGES[i];
+
+                const time = Date.now();
+                /** @type MessageMetadata **/
+                const newAckPre = {
+                    content: message,
+                    ackpre: time,
+                };
+                preAcks.set(message, newAckPre);
+
+                // sendWhatsappMessage(textBox, message);
+                sendMessageToWhatsapp(message);
+
                 resolve();
             }, i * betweenTime);
         });
@@ -340,6 +376,7 @@ window.init_collection = async function(quantity) {
 
     // Need to wait all sent messages to arrive
     await Promise.all(sentResult);
+    console.log("Promises concluded.");
     // Wait a bit more just to capture the final ack
     await new Promise(resolve => setTimeout(resolve, TIME_BETWEEN_MESSAGES_MILISECONDS * 5));
     console.log("Done sending messages.");
@@ -464,7 +501,7 @@ function update(db, data) {
         getRequest.onsuccess = function() {
             const existing = getRequest.result;
             if (!existing) {
-                reject(new Error(`Message with id ${data.id} not found`));
+                reject(new Error(`Message with id ${data.id} not found. result is ${existing}`));
                 return;
             }
 
@@ -495,7 +532,7 @@ function update(db, data) {
 */
 function deleteMessage(db, id) {
     return new Promise((resolve, reject) => {
-        if (!db) {
+        if (!id) {
             reject(new Error('Database not ready'));
             return;
         }
@@ -551,7 +588,7 @@ function deleteAllMessages(db) {
     * @param {IDBDatabase} db
     * @returns {Promise<void>}
 */
-function exportToCSV(db) {
+async function exportToCSV(db) {
     return new Promise((resolve, reject) => {
         if (!db) {
             reject(new Error('Database not ready'));
@@ -564,7 +601,6 @@ function exportToCSV(db) {
 
         request.onsuccess = function() {
             const data = request.result;
-
             if (data.length === 0) {
                 console.log('[DB] No data to export');
                 resolve();
@@ -572,7 +608,7 @@ function exportToCSV(db) {
             }
 
             // Define column order
-            const headers = ['id', 'hash', 'content', 'ack0', 'ack1', 'ack2', 'ack3', 'memory'];
+            const headers = ['id', 'content', 'hash', 'ackpre', 'ack0', 'ack1', 'ack2', 'ack3', 'memory'];
 
             // Build CSV
             const csvRows = [];

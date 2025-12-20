@@ -2,6 +2,7 @@ import { finishingAuditableChatRoutine } from "./utils/finishing_routine";
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
 import { ActionOptions, AuditableControlMessage, AuditableChatStates, WhatsappMessage, GenerateWhatsappMessage, InternalMessage, MetadataOptions, AuditableMetadata } from "./utils/types";
 import { displayRequestWindow } from "./utils/request_popup";
+import { logger } from "./core_utils/logger";
 
 class DomProcessor {
     private currentChatButton: HTMLDivElement | null;
@@ -48,7 +49,8 @@ class DomProcessor {
                 const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
                 if (!auditableState) throw new Error("There should be a conversation created.");
                 if (!auditableState.internalAuditableChatVariables) throw new Error("There should be a auditable chat reference.");
-                console.log("auditableState before finishing: ", auditableState);
+                // put in DEBUG
+                // console.log("auditableState before finishing: ", auditableState);
 
                 const returnedMessageId: string = await chrome.runtime.sendMessage({
                     action: ActionOptions.SEND_TEXT_MESSAGE,
@@ -219,6 +221,7 @@ class DomProcessor {
                 e.preventDefault();
                 if (auditableChatbox?.textContent?.length === 0) return; // do nothing on messages with no text
 
+                logger.info("Message generated. Started calculating metadata.");
                 chrome.runtime.sendMessage({
                     action: ActionOptions.GENERATE_AND_SEND_BLOCK,
                     payload: {
@@ -279,9 +282,12 @@ window.addEventListener("message", async (event: MessageEvent) => {
     if (internalMessage.action !== ActionOptions.PROPAGATE_NEW_MESSAGE) return;
 
     const whatsappMessage = internalMessage.payload as WhatsappMessage;
+    logger.info("New message arrived: ");
+    logger.info(whatsappMessage);
     const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
     const { chatId } = whatsappMessage;
     const oldState = await AuditableChatStateMachine.getAuditableChat(chatId);
+    // put in DEBUG
     // console.log("oldState is: ", oldState);
 
     // Manage AuditableChats state
@@ -289,15 +295,14 @@ window.addEventListener("message", async (event: MessageEvent) => {
         (whatsappMessage.metadata as AuditableMetadata).seed || oldState?.internalAuditableChatVariables?.auditableChatSeed :
         oldState?.internalAuditableChatVariables?.auditableChatSeed;
     const counterpartPublicKey = metadataIsAuditable ? (whatsappMessage.metadata as AuditableMetadata).counterpartPublicKey : undefined;
-    // console.log("Seed is: ", seed);
     const newState = await AuditableChatStateMachine.updateState(chatId, whatsappMessage, {
         seed,
         messageId: whatsappMessage.messageId,
         publicKey: counterpartPublicKey
     });
+    // put in DEBUG
     // console.log("newState is: ", newState);
     currentAuditableChatId = chatId;
-    // console.log("newState really is: ", await AuditableChatStateMachine.getAuditableChat(chatId));
 
     // Update DOM
     if (currentAuditableChatId === chatId) {

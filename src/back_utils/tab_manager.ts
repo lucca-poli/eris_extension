@@ -1,3 +1,4 @@
+import { logger } from "../core_utils/logger";
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
 
 // Tab manager - Manages current whatsapp web session
@@ -17,7 +18,9 @@ export class TabManager {
             (a, b) => (b.lastAccessed! - a.lastAccessed!)
         );
 
-        if (whatsappTabs) this.currentTab = whatsappTabs[0];
+        if (whatsappTabs) {
+            this.currentTab = whatsappTabs[0];
+        }
     }
 
     updateTab(newTab?: chrome.tabs.Tab) {
@@ -47,7 +50,7 @@ export function setupTabsListeners(tabManager: TabManager) {
 
     chrome.commands.onCommand.addListener((shortcut) => {
         if (shortcut === "reload") {
-            console.log("Reloaded extension!");
+            logger.info("Reloaded extension!");
             chrome.runtime.reload();
         }
     })
