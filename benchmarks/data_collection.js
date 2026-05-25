@@ -13,13 +13,11 @@ import WPP from "@wppconnect/wa-js";
 /**
      * @typedef {Object} MessageMetadata
      * @property {string} [content] - Text content of the message
-     * @property {number} [ackpre] - Time in which space was pressed to send the message in Unix Timestamp
      * @property {string} [id] - Id of the message
      * @property {string} [hash] - Hash of the corresponding block
-     * @property {number} [ack0] - Time in which the message was sent in Unix Timestamp for status 0
-     * @property {number} [ack1] - Time in which the message was sent in Unix Timestamp for status 1
-     * @property {number} [ack2] - Time in which the message was sent in Unix Timestamp for status 2
-     * @property {number} [ack3] - Time in which the message was sent in Unix Timestamp for status 3
+     * @property {number} [ack0] - Time when the extension start to calculate the metadata (hash and signature) in Unix Timestamp
+     * @property {number} [ack1] - Time when message is sent WhatsApp Web app in Unix Timestamp
+     * @property {number} [ack2] - Time for message to reach WhatsApp Web app in Unix Timestamp for status 0
      * @property {number} [memory] - Memory in bytes read from Whatsapp Web WebSocket
 */
 
@@ -31,7 +29,7 @@ import WPP from "@wppconnect/wa-js";
 
 const TIME_BETWEEN_MESSAGES_MILISECONDS = 10000;
 const TIME_DIFFERENCE_FROM_MEASUREMENT = 2000;
-const TEST_MESSAGES = [];
+const TEST_MESSAGES = ["gmob", "0Axf", "nT6K", "sCtl", "2It4", "wxmh", "b0rX", "N13X", "oWP8", "s6TD", "w0sZ", "769q", "jX6t", "f6TA", "60eL", "terq", "u9wL", "XMmC", "VdFz", "bRWd", "muX3", "eLDr", "IOkH", "Zo1j", "VrML"];
 
 /** @type {IDBDatabase} **/
 let db;
@@ -61,8 +59,6 @@ dbRequest.onsuccess = function() {
 const receivedSocketData = [];
 /** @type {SocketData[]} **/
 const sentSocketData = [];
-/** @type {Map<string, MessageMetadata>} **/
-const preAcks = new Map([]);
 /** @type {boolean} **/
 let collectionRunning = false;
 // console.log('[Monitor] Starting WebSocket monitor...');
@@ -118,7 +114,7 @@ WhatsappLayer.on("chat.new_message", async (whatsappMessage) => {
     // console.log("Incoming message: ", whatsappMessage);
     const content = whatsappMessage.body;
     const status = whatsappMessage.ack
-    const time = Date.now();
+    const time = new Date().toISOString();
     const chatId = whatsappMessage.id?.remote?._serialized;
     const author = whatsappMessage.from?._serialized;
     if (content === undefined) {
@@ -149,18 +145,11 @@ WhatsappLayer.on("chat.new_message", async (whatsappMessage) => {
         await new Promise(resolve => setTimeout(resolve, TIME_DIFFERENCE_FROM_MEASUREMENT));
         // console.log('[SENT]: ', sentSocketData);
         const memory = findClosestSocketData(time, sentSocketData, TIME_DIFFERENCE_FROM_MEASUREMENT, "sent");
-        const ackpre = preAcks.get(content)?.ackpre;
-        if (ackpre) preAcks.delete(content);
-        else {
-            console.error("Couldnt find ackpre with content ", content);
-            throw new Error("Couldnt find ackpre.");
-        }
 
         whatsappData = {
             id: whatsappMessage.id.id,
             content,
-            ack0: time,
-            ackpre,
+            ack2: time,
             memory,
             // hash
         };
@@ -180,39 +169,39 @@ WhatsappLayer.on("chat.new_message", async (whatsappMessage) => {
     } else {
         throw new Error("There should only be 0 or 1 for new messages.");
     }
-    create(db, whatsappData).catch((e) => console.log("Error in new message creation: ", e));
+    upsert(db, whatsappData).catch((e) => console.log("Error in new message creation: ", e));
 });
-WhatsappLayer.on("chat.msg_ack_change", (statusChange) => {
-    const status = statusChange.ack
-    const time = Date.now();
-    if (status === undefined) {
-        console.error("No status present in message.");
-        console.log(statusChange);
-    }
-    for (const id of statusChange.ids) {
-        /** @type {MessageMetadata} **/
-        let whatsappData;
-        if (status === 1) {
-            whatsappData = {
-                id: id.id,
-                ack1: time
-            };
-        } else if (status === 2) {
-            whatsappData = {
-                id: id.id,
-                ack2: time
-            };
-        } else if (status === 3) {
-            whatsappData = {
-                id: id.id,
-                ack3: time
-            };
-        } else {
-            throw new Error("There should only be 1, 2 or 3 for updated messages.");
-        }
-        update(db, whatsappData).catch((e) => console.log("Error in new message update: ", e, " status is ", status));
-    }
-});
+// WhatsappLayer.on("chat.msg_ack_change", (statusChange) => {
+//     const status = statusChange.ack
+//     const time = Date.now();
+//     if (status === undefined) {
+//         console.error("No status present in message.");
+//         console.log(statusChange);
+//     }
+//     for (const id of statusChange.ids) {
+//         /** @type {MessageMetadata} **/
+//         let whatsappData;
+//         if (status === 1) {
+//             whatsappData = {
+//                 id: id.id,
+//                 ack1: time
+//             };
+//         } else if (status === 2) {
+//             whatsappData = {
+//                 id: id.id,
+//                 ack2: time
+//             };
+//         } else if (status === 3) {
+//             whatsappData = {
+//                 id: id.id,
+//                 ack3: time
+//             };
+//         } else {
+//             throw new Error("There should only be 1, 2 or 3 for updated messages.");
+//         }
+//         update(db, whatsappData).catch((e) => console.log("Error in new message update: ", e, " status is ", status));
+//     }
+// });
 
 /**
  * @param {Element} chatBox 
@@ -249,12 +238,39 @@ function sendWhatsappMessage(chatBox, message) {
 /**
  * @param {string} message 
 **/
-function sendMessageToWhatsapp(message) {
+async function sendMessageToWhatsapp(message) {
     /** @type {WPP} **/
     const WhatsappLayer = window.WPP;
 
     const chatIdMocked = "5513991174080@c.us";
-    WhatsappLayer.chat.sendTextMessage(chatIdMocked, message);
+    const microMetadataMocked = "{\n\".\": \".\"\n}";
+    /** @type {MessageMetadata} **/
+    let whatsappData;
+
+    const level = "INFO";
+    const color = { DEBUG: '#7f8c8d', INFO: '#2ecc71', WARN: '#f1c40f', ERROR: '#e74c3c' }[level];
+    const sentTime = new Date().toISOString();
+    console.log(`%c[${sentTime}] [${level}]`, `color: ${color}; font-weight: bold;`, "Sending new message:");
+    console.log(`%c[${sentTime}] [${level}]`, `color: ${color}; font-weight: bold;`, message);
+
+    const messageReturn = await WhatsappLayer.chat.sendTextMessage(chatIdMocked, message, {
+        // @ts-ignore: talvez de merda depois ignorar esse erro
+        linkPreview: {
+            description: microMetadataMocked,
+        }
+    });
+
+    // const arrivedTime = new Date().toISOString();
+    // console.log(`%c[${arrivedTime}] [${level}]`, `color: ${color}; font-weight: bold;`, message);
+
+    const messageId = messageReturn.id.split('_')[2];
+
+    whatsappData = {
+        id: messageId,
+        ack1: sentTime
+    };
+
+    upsert(db, whatsappData).catch((e) => console.log("Error in new message update: ", e));
 }
 
 /**
@@ -290,7 +306,7 @@ function generateRandomMessage(length) {
 /** @param {number} betweenTime  **/
 /** @returns {Promise[]} quantity  **/
 function sendMessages(quantity, betweenTime) {
-    const textBox = window.document.querySelectorAll(".selectable-text.copyable-text.x15bjb6t.x1n2onr6")[1];
+    const textBox = window.document.querySelectorAll("p.copyable-text")[1];
     // if (textBox) console.log("Chat box found.");
 
     const promises = [];
@@ -299,17 +315,9 @@ function sendMessages(quantity, betweenTime) {
         const promise = new Promise((resolve) => {
             setTimeout(() => {
                 // Sending message
-                // const length = 4 ** 4;
+                // const length = 4 ** 1;
                 // const message = generateRandomMessage(length);
                 const message = TEST_MESSAGES[i];
-
-                const time = Date.now();
-                /** @type MessageMetadata **/
-                const newAckPre = {
-                    content: message,
-                    ackpre: time,
-                };
-                preAcks.set(message, newAckPre);
 
                 // sendWhatsappMessage(textBox, message);
                 sendMessageToWhatsapp(message);
@@ -338,7 +346,7 @@ function findClosestSocketData(time, SocketDataArray, TIME_DIFFERENCE_FROM_MEASU
             return difference < TIME_DIFFERENCE_FROM_MEASUREMENT && difference > 0;
         })
         .map((data) => data.memory);
-    console.log("Memories collected: ", memoriesWithinRange, " at time ", time);
+    // console.log("Memories collected: ", memoriesWithinRange, " at time ", time);
     const maximalEstimate = Math.max(...memoriesWithinRange);
 
     // Pruning the array - find index to keep from
@@ -470,6 +478,53 @@ function create(db, data) {
         };
 
         request.onerror = function(e) {
+            reject(e);
+        };
+    });
+}
+
+/**
+ * Updates an existing message entry or creates it if it doesn't exist.
+ * @param {IDBDatabase} db 
+ * @param {MessageMetadata} data - The message metadata (must include id)
+ * @returns {Promise<string>} The id of the message
+ */
+function upsert(db, data) {
+    return new Promise((resolve, reject) => {
+        if (!db) {
+            reject(new Error('Database not ready'));
+            return;
+        }
+        if (!data.id) {
+            reject(new Error('Message id is required'));
+            return;
+        }
+
+        const transaction = db.transaction(['messages'], 'readwrite');
+        const store = transaction.objectStore('messages');
+
+        // Check if the record already exists
+        const getRequest = store.get(data.id);
+
+        getRequest.onsuccess = function() {
+            const existing = getRequest.result;
+
+            // If exists, merge; otherwise, use the new data as the base
+            const finalData = existing ? { ...existing, ...data } : data;
+
+            // put() handles both insertion and updates
+            const putRequest = store.put(finalData);
+
+            putRequest.onsuccess = function() {
+                resolve(data.id);
+            };
+
+            putRequest.onerror = function(e) {
+                reject(e);
+            };
+        };
+
+        getRequest.onerror = function(e) {
             reject(e);
         };
     });
@@ -608,7 +663,7 @@ async function exportToCSV(db) {
             }
 
             // Define column order
-            const headers = ['id', 'content', 'hash', 'ackpre', 'ack0', 'ack1', 'ack2', 'ack3', 'memory'];
+            const headers = ['id', 'content', 'hash', 'ack0', 'ack1', 'ack2', 'memory'];
 
             // Build CSV
             const csvRows = [];
@@ -634,7 +689,7 @@ async function exportToCSV(db) {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `whatsapp-data-${Date.now()}.csv`;
+            link.download = `whatsapp-data-last-${Date.now()}.csv`;
             link.click();
             URL.revokeObjectURL(url);
 

@@ -1,3 +1,4 @@
+import { SendMessageReturn } from "@wppconnect/wa-js/dist/chat";
 import { logger } from "../core_utils/logger";
 import { WhatsappMessage, AuditableMetadata, GetMessagesOptions } from "./types";
 import WPP from "@wppconnect/wa-js"
@@ -57,6 +58,7 @@ export async function sendTextMessage(tabId: number, chatMessage: WhatsappMessag
     });
 
     logger.info("Message sent.");
+    logger.info(result as SendMessageReturn);
     return result;
 }
 

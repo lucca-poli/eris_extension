@@ -243,7 +243,8 @@ class DomProcessor {
     }
 
     private setupChatbox(chatId: string) {
-        const originalChatbox = document.querySelectorAll('p.selectable-text.copyable-text')[1]?.parentElement?.parentElement;
+        const originalChatbox = document.querySelectorAll('p.copyable-text')[1]?.parentElement?.parentElement;
+        if (!originalChatbox) logger.error("Original chatbox node could'n be found.")
         const holderText = originalChatbox?.firstElementChild?.ariaLabel as string;
         const originalText = originalChatbox?.firstElementChild?.firstElementChild?.querySelector('span')?.innerHTML;
 
