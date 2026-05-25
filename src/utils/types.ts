@@ -1,6 +1,8 @@
 export enum ActionOptions {
     PROPAGATE_NEW_CHAT = "PROPAGATE_NEW_CHAT",
     PROPAGATE_NEW_MESSAGE = "PROPAGATE_NEW_MESSAGE",
+    PROPAGATE_LOGS = "PROPAGATE_LOGS",
+    EXPORT_LOGS = "EXPORT_LOGS",
     GENERATE_AND_SEND_BLOCK = "GENERATE_AND_SEND_BLOCK",
     GET_MESSAGES = "GET_MESSAGES",
     DELETE_MESSAGES = "DELETE_MESSAGES",
@@ -31,6 +33,22 @@ export enum AuditableChatStates {
     WAITING_ACK = "WAITING_ACK",
     IDLE = "IDLE"
 };
+
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
+export enum LogWeight {
+    DEBUG = 0,
+    INFO = 1,
+    WARN = 2,
+    ERROR = 3
+}
+
+export interface LogEntry {
+    id: string;
+    timestamp: string;
+    level: LogLevel;
+    content: string;
+}
 
 export type InternalMessage = {
     action: ActionOptions,
@@ -89,7 +107,9 @@ export type WhatsappMessage = {
 }
 
 interface BaseMetadata {
-    kind: MetadataOptions
+    kind: MetadataOptions;
+    block: AuditableBlock | AgreeToDisagreeBlock;
+    signature: string;
 }
 
 export enum MetadataOptions {

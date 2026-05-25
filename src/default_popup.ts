@@ -1,5 +1,6 @@
-import { ChatState } from "./utils/types";
+import { ActionOptions, ChatState, InternalMessage } from "./utils/types";
 import { AuditableChatStateMachine } from "./utils/auditable_chat_state_machine";
+import { logger } from "./core_utils/logger";
 
 const root = document.getElementById('root');
 if (!root) throw new Error("Couldn't find popup root element.");
@@ -19,11 +20,44 @@ async function loadPopupContent(root: HTMLElement) {
     const chatsDiv = createChatStatesDisplay(chats);
     root.appendChild(chatsDiv);
 
+    const buttonContainer = document.createElement("div");
+    buttonContainer.style.display = "flex";
+    buttonContainer.style.gap = "10px";
+    buttonContainer.style.marginTop = "10px";
+
     // Create delete button
     const deleteAllButton = document.createElement("button");
     deleteAllButton.textContent = "Delete current chats";
     deleteAllButton.style.marginTop = "10px";
     deleteAllButton.style.padding = "5px 10px";
+
+    // Download logs button
+    const downloadButton = document.createElement("button");
+    downloadButton.textContent = "Download Logs";
+    downloadButton.style.padding = "5px 10px";
+    downloadButton.style.flex = "1";
+    downloadButton.style.backgroundColor = "#2ecc71"; // Green color
+    downloadButton.style.color = "white";
+    downloadButton.style.border = "none";
+    downloadButton.style.cursor = "pointer";
+
+    downloadButton.onclick = async () => {
+        downloadButton.textContent = "Exporting...";
+        downloadButton.disabled = true;
+        await loadPopupContent(root);
+
+        try {
+            await chrome.runtime.sendMessage({
+                action: ActionOptions.EXPORT_LOGS,
+            } as InternalMessage);
+        } catch (e) {
+            console.error("Export failed", e);
+        } finally {
+            downloadButton.textContent = "Download Logs";
+            downloadButton.disabled = false;
+            await loadPopupContent(root);
+        }
+    };
 
     // Set up the delete handler properly
     deleteAllButton.onclick = async () => {
@@ -37,7 +71,9 @@ async function loadPopupContent(root: HTMLElement) {
         // setTimeout(() => chrome.action.openPopup(), 100);
     };
 
-    root.appendChild(deleteAllButton);
+    buttonContainer.appendChild(deleteAllButton);
+    buttonContainer.appendChild(downloadButton);
+    root.appendChild(buttonContainer);
 }
 
 function createChatStatesDisplay(chats: Record<string, ChatState>): HTMLElement {

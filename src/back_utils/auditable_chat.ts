@@ -1,3 +1,4 @@
+import { logger } from "../core_utils/logger";
 import { AuditableChatStateMachine } from "../utils/auditable_chat_state_machine";
 import {
     AgreeToDisagreeBlock,
@@ -41,16 +42,16 @@ export async function generateSignature(privateKey: CryptoKey, block: AuditableB
     const encoder = new TextEncoder();
     const data = encoder.encode(dataToEncode);
 
-    // console.log("Generating signature.");
-    // console.log("Stringified data:", dataToEncode);
-    // console.log("Hash length:", data.length);
+    logger.info("Generating signature.");
 
     const signature = await crypto.subtle.sign(
         { name: "ECDSA", hash: "SHA-256" },
         privateKey,
         data
     );
+    logger.info("Signature made.");
     const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+    logger.info("Signature converted to string.");
 
     return signatureB64;
 }
@@ -68,16 +69,14 @@ export async function verifySignature(publicKey: CryptoKey, signatureB64: string
     const encoder = new TextEncoder();
     const data = encoder.encode(dataToEncode);
 
-    // console.log("Verifying signature.");
-    // console.log("Stringified data:", dataToEncode);
-    // console.log("Hash length:", data.length);
-
+    logger.info("Verifying signature.");
     const isValid = await crypto.subtle.verify(
         { name: "ECDSA", hash: "SHA-256" },
         publicKey,
         signature,
         data
     );
+    logger.info("Finished verifying");
 
     return isValid;
 }
@@ -130,6 +129,7 @@ export async function assembleAgreeToDisagreeBlock(previousData: PreviousData, c
         previousData: sortedObject,
         counter,
     };
+    // put in DEBUG
     // console.log("hashArgs: ", hashArgs);
     const newHash = await hashFunction(hashArgs);
 
@@ -174,14 +174,16 @@ export async function generateCommitedMessage(chatId: string, messageToProcess: 
         seed,
         counter
     };
-    console.log("commitedKeyArgs: ", commitedKeyArgs);
+    // put in DEBUG
+    // console.log("commitedKeyArgs: ", commitedKeyArgs);
     const commitedKey = await prf(commitedKeyArgs);
 
     const commitedMessageArgs: CommitArgs = {
         commitedKey,
         message: JSON.stringify(messageToProcess)
     };
-    console.log("commitedMessageArgs: ", commitedMessageArgs);
+    // put in DEBUG
+    // console.log("commitedMessageArgs: ", commitedMessageArgs);
     const commitedMessage = await commitFunction(commitedMessageArgs);
 
     return commitedMessage
@@ -225,6 +227,7 @@ export async function commitFunction(args: CommitArgs) {
 }
 
 export async function hashFunction(args: HashArgs | AgreeToDisagreeHashArgs) {
+    logger.info("Initiated hashing.");
     const serializedData = JSON.stringify(args);
 
     // 1. Encode the string as UTF-8
@@ -239,6 +242,7 @@ export async function hashFunction(args: HashArgs | AgreeToDisagreeHashArgs) {
     const hashHex = hashArray
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
+    logger.info("Finished hashing.");
 
     return hashHex;
 }

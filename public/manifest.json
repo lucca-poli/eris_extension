@@ -7,7 +7,8 @@
     "scripting",
     "activeTab",
     "tabs",
-    "commands"
+    "commands",
+    "downloads"
   ],
   "manifest_version": 3,
   "host_permissions": [

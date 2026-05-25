@@ -17,7 +17,8 @@ import {
     MessagesToDelete,
     AuditableChatStates,
     InternalAuditableChatVariables,
-    Signature
+    Signature,
+    LogEntry
 } from "../utils/types";
 import {
     convertTextKey,
@@ -33,6 +34,8 @@ import {
 import { deleteMessage, getChatMessages, getUserId, sendFileMessage, sendTextMessage, setInputbox } from "../utils/chrome_lib";
 import { TabManager } from "./tab_manager";
 import { verificationRoutine } from "../core_utils/verify";
+import { logger } from "../core_utils/logger";
+import { SendMessageReturn } from "@wppconnect/wa-js/dist/chat";
 
 async function processAuditableMetadata(tabId: number, chatId: string, whatsappMessage: WhatsappMessage, startingMessage: boolean, internalVariables: InternalAuditableChatVariables) {
     const auditableMetadata = whatsappMessage.metadata as AuditableMetadata;
@@ -67,7 +70,8 @@ async function processAuditableMetadata(tabId: number, chatId: string, whatsappM
 
     // Updating internal state
     await AuditableChatStateMachine.updateAuditableChatState(chatId, auditableBlock.hash);
-    console.log("State after updating: ", await AuditableChatStateMachine.getAuditableChat(chatId));
+    // put in DEBUG
+    // console.log("State after updating: ", await AuditableChatStateMachine.getAuditableChat(chatId));
 
 
     // Send ACK
@@ -87,13 +91,14 @@ async function processAuditableMetadata(tabId: number, chatId: string, whatsappM
         metadata: ackMetadata,
         content: AuditableControlMessage.ACK
     }
-    console.log("Ack sent: ", ackMetadata);
     const ackResponse = await sendTextMessage(tabId, messageToSend);
+    logger.info("Ack sent:");
+    logger.info(ackResponse as SendMessageReturn);
     if (!ackResponse) throw new Error("Problem in sending ACK.");
     await deleteMessage(tabId, chatId, ackResponse.id);
-    console.log("Ack message deleted.")
 
-    console.log("State after ack sent: ", await AuditableChatStateMachine.getAuditableChat(chatId));
+    // put in DEBUG
+    // console.log("State after ack sent: ", await AuditableChatStateMachine.getAuditableChat(chatId));
 }
 
 // Responsabilidades: checar pela chave publica da outra parte e verificar os acks
@@ -111,11 +116,14 @@ async function processAckMetadata(chatId: string, whatsappMessage: WhatsappMessa
 
     // Process counterpart signature
     if (!internalVariables.counterpartPublicKey) throw new Error("Counterpart public key not found.");
-    console.log("Checking signature in ack.");
+    logger.info("Checking signature in ack.");
+    // put in DEBUG
+    // console.log("current counter is ", internalVariables.counter)
     const counterpartPublicKeyReadable = await convertTextKey(internalVariables.counterpartPublicKey);
     const signResult = await verifySignature(counterpartPublicKeyReadable, ackMetadata.signature, ackMetadata.block);
     if (!signResult) {
-        console.error("ackMetadata:", ackMetadata);
+        logger.error("False signature! ACK metadata is:");
+        logger.error(ackMetadata);
         throw new Error("False signature!");
     }
 
@@ -132,7 +140,9 @@ export async function updateSignature(chatId: string, newSignature: Signature, o
     const currentAuditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
     if (!currentAuditableState) throw new Error("No state found for this chat.");
     if (!currentAuditableState.internalAuditableChatVariables) throw new Error("No internal state found for this chat.");
-    console.log("current state of signatures: ", currentAuditableState.internalAuditableChatVariables);
+    // put in DEBUG
+    // console.log("current state of signatures: ", currentAuditableState.internalAuditableChatVariables);
+    // console.log("current counter is", currentAuditableState.internalAuditableChatVariables.counter);
 
     const counterpartCounter = currentAuditableState.internalAuditableChatVariables.counterpartSignature?.counter || -1;
     const ownCounter = currentAuditableState.internalAuditableChatVariables.selfSignature?.counter || -1;
@@ -158,11 +168,14 @@ export function setupChromeListeners(tabManager: TabManager) {
         const metadataIsAuditable = whatsappMessage.metadata?.kind === MetadataOptions.AUDITABLE;
         const metadataIsAck = whatsappMessage.metadata?.kind === MetadataOptions.ACK;
         const tabId = tabManager.getWhatsappTab().id as number;
-        console.log("IncomingMessage: ", whatsappMessage);
+        logger.info("IncomingMessage:");
+        logger.info(whatsappMessage);
 
         (async () => {
             const auditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
             if (!auditableState) throw new Error("Auditable chat is not present.");
+            // put in DEBUG
+            // console.log("current counter is ", auditableState.internalAuditableChatVariables?.counter)
 
             // Separar em processamento de mensagem de chat auditavel e de ack
             const stateIsWaitingAck = auditableState.currentState === AuditableChatStates.WAITING_ACK;
@@ -194,7 +207,8 @@ export function setupChromeListeners(tabManager: TabManager) {
         if (startingMessage) {
             // User envia mensagem de aceite
             const seed = await generateAuditableSeed(chatId)
-            console.log("Seed created: ", seed)
+            // put in DEBUG
+            // console.log("Seed created: ", seed)
             const currentAuditableState = await AuditableChatStateMachine.getAuditableChat(chatId);
             if (!currentAuditableState) throw new Error("No auditable chat found.");
             const internalState = await AuditableChatStateMachine.assembleAuditableChatStart(seed);
@@ -237,7 +251,9 @@ export function setupChromeListeners(tabManager: TabManager) {
             }
 
             const auditableChat = await AuditableChatStateMachine.getAuditableChat(chatId);
-            console.log("Current State before sending message: ", auditableChat);
+            // put in DEBUG
+            // console.log("Current State before sending message: ", auditableChat);
+            // console.log("current counter is: ", (await AuditableChatStateMachine.getAuditableChat(chatId))?.internalAuditableChatVariables?.counter)
             if (!auditableChat) throw new Error("No auditable chat found.");
             const internalState = auditableChat.internalAuditableChatVariables;
             if (!internalState) throw new Error("No chat reference found.");
@@ -250,8 +266,10 @@ export function setupChromeListeners(tabManager: TabManager) {
             const commitedMessage = await generateCommitedMessage(chatId, auditableContent, previousBlockState.counter);
             const auditableBlock = await generateBlock(commitedMessage, previousBlockState);
             const signature = await generateSignature(privateKey, auditableBlock);
-            console.log("Signing on: ", auditableBlock);
-            console.log("Resulting signature: ", signature);
+            // put in DEBUG
+            // console.log("Signing on: ", auditableBlock);
+            // console.log("Resulting signature: ", signature);
+            // console.log("current counter is: ", (await AuditableChatStateMachine.getAuditableChat(chatId))?.internalAuditableChatVariables?.counter)
 
             whatsappMessage.metadata = {
                 kind: MetadataOptions.AUDITABLE,
@@ -263,6 +281,9 @@ export function setupChromeListeners(tabManager: TabManager) {
 
         const updatedHash = whatsappMessage.metadata.block.hash;
         await AuditableChatStateMachine.updateAuditableChatState(chatId, updatedHash);
+        // put in DEBUG
+        // console.log("State after updating: ", await AuditableChatStateMachine.getAuditableChat(chatId));
+        // console.log("Counter after updating: ", (await AuditableChatStateMachine.getAuditableChat(chatId))?.internalAuditableChatVariables?.counter);
 
         // Updating own signature reference
         const auditableMetadata = whatsappMessage.metadata as AuditableMetadata;
@@ -274,7 +295,9 @@ export function setupChromeListeners(tabManager: TabManager) {
         await updateSignature(chatId, ownSignature, true);
 
         const returnStatus = await sendTextMessage(tabId, whatsappMessage);
-        console.log("Message sent: ", returnStatus);
+        // put in DEBUG
+        // console.log("Message sent: ", returnStatus);
+        // console.log("current counter is: ", (await AuditableChatStateMachine.getAuditableChat(chatId))?.internalAuditableChatVariables?.counter)
     });
 
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
@@ -283,6 +306,19 @@ export function setupChromeListeners(tabManager: TabManager) {
         const message = internalMessage.payload as string;
         const tabId = tabManager.getWhatsappTab().id as number;
         setInputbox(tabId, message);
+    });
+
+    chrome.runtime.onMessage.addListener((internalMessage: InternalMessage) => {
+        if (internalMessage.action !== ActionOptions.PROPAGATE_LOGS) return;
+
+        const logEntry = internalMessage.payload as LogEntry;
+        logger.saveToDB(logEntry);
+    });
+
+    chrome.runtime.onMessage.addListener(async (internalMessage: InternalMessage) => {
+        if (internalMessage.action !== ActionOptions.EXPORT_LOGS) return;
+
+        await logger.exportLogs();
     });
 
     chrome.runtime.onMessage.addListener((internalMessage: InternalMessage, _sender, sendResponse) => {

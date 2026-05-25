@@ -16,8 +16,12 @@ If you want to tweak the code a bit, run ```npm run dev``` and every time you sa
 
 If you want to test the 1x1 chat, try running 2 different browsers and loading the same compiled /dist for both of them.
 
+# Serialization models
+
+The metadata is sent in form of a long binary attached to the messages.
+
 # Refinement Pool
-- No features to be made by now.
+- Make a logger to do the instrumentation. It must have the levels DEBUG, INFO, WARN, ERROR. The level should be setted by a env variable or a cli arg. Each logs must have the time, level and content. Substitute all console logs for this one.
 
 # Bugs
 - consertar o bug de poder aceitar uma requisição de uma conversa segura em outra

@@ -1,3 +1,5 @@
+import { SendMessageReturn } from "@wppconnect/wa-js/dist/chat";
+import { logger } from "../core_utils/logger";
 import { WhatsappMessage, AuditableMetadata, GetMessagesOptions } from "./types";
 import WPP from "@wppconnect/wa-js"
 
@@ -34,6 +36,9 @@ export async function sendTextMessage(tabId: number, chatMessage: WhatsappMessag
     const metadataString = metadata ? JSON.stringify(metadata) : "";
     if (typeof (content) !== "string") throw new Error("Content is undefined.");
 
+    logger.info("Sending message:");
+    logger.info(content);
+
     const [{ result }] = await chrome.scripting.executeScript({
         func: (chatId: string, content: string, metadata?: string) => {
             // @ts-ignore
@@ -51,6 +56,9 @@ export async function sendTextMessage(tabId: number, chatMessage: WhatsappMessag
         target: { tabId },
         world: 'MAIN',
     });
+
+    logger.info("Message sent.");
+    logger.info(result as SendMessageReturn);
     return result;
 }
 
@@ -60,7 +68,13 @@ export async function deleteMessage(tabId: number, chatId: string, messageId: st
             // @ts-ignore
             const WhatsappLayer: typeof WPP = window.WPP;
 
-            WhatsappLayer.chat.deleteMessage(chatId, messageId).then((deleteReturn) => console.log("Message deleted: ", deleteReturn)).catch((error) => console.log("error in deletion: ", error));
+            WhatsappLayer.chat.deleteMessage(chatId, messageId)
+                // put in DEBUG
+                // .then((deleteReturn) => console.log("Message deleted: ", deleteReturn))
+                .catch((error) => {
+                    logger.error("Error deleting message:");
+                    logger.error(error);
+                });
         },
         args: [chatId, messageId],
         target: { tabId },
@@ -83,16 +97,18 @@ export async function sendFileMessage(tabId: number, chatId: string, fileContent
         world: 'MAIN',
     });
 
-    console.log("result is: ", result)
+    // put in DEBUG
+    // console.log("result is: ", result)
     return result;
 }
 
 export async function getChatMessages(tabId: number, chatId: string, options?: GetMessagesOptions) {
     if (options?.count === 0) return [];
-    console.log("getMessages args: ");
-    console.log("tabId: ", tabId);
-    console.log("chatId: ", chatId);
-    console.log("options: ", options);
+    // put in DEBUG
+    // console.log("getMessages args: ");
+    // console.log("tabId: ", tabId);
+    // console.log("chatId: ", chatId);
+    // console.log("options: ", options);
     const [{ result }] = await chrome.scripting.executeScript({
         func: (chatId: string, options?: GetMessagesOptions) => {
             // Return a promise that we'll resolve in the injected context
@@ -116,7 +132,8 @@ export async function getChatMessages(tabId: number, chatId: string, options?: G
                         resolve(auditableMessages);
                     })
                     .catch((error: any) => {
-                        console.error("Error getting messages:", error);
+                        logger.error("Error getting messages:");
+                        logger.error(error)
                         resolve(null); // Resolve with null on error
                     });
             });

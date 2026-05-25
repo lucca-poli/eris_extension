@@ -3,6 +3,7 @@ import { assembleAgreeToDisagreeBlock, generateSignature, getPrivateKey } from "
 import { verificationRoutine } from "../core_utils/verify";
 import { finishingAuditableChatRoutine } from "./finishing_routine";
 import { AckMetadata, AuditableControlMessage, InternalAuditableChatVariables, AuditableChatStates, WhatsappMessage, ChatState, ActionOptions, InternalMessage, MetadataOptions, AuditableMetadata, AgreeToDisagreeMetadata, PreviousBlockVerificationData, PreviousData, GetMessagesOptions, MessagesToDelete } from "./types";
+import { logger } from "../core_utils/logger";
 
 // returns undefined if not found and the hash of the root if found
 function searchCollidedInBatch(whatsappMessages: WhatsappMessage[]): string | undefined {
@@ -12,13 +13,15 @@ function searchCollidedInBatch(whatsappMessages: WhatsappMessage[]): string | un
     for (const auditableMessage of auditableMessages) {
         const previousHash = (auditableMessage.metadata as AuditableMetadata).block.previousHash;
 
-        console.log("PreviousHash table: ", registeredMessagesPreviousHashes);
-        console.log("current previousHash: ", previousHash);
+        // put in DEBUG
+        // console.log("PreviousHash table: ", registeredMessagesPreviousHashes);
+        // console.log("current previousHash: ", previousHash);
         if (registeredMessagesPreviousHashes.has(previousHash)) return previousHash;
         registeredMessagesPreviousHashes.add(previousHash);
     }
 
-    console.log("Should not return undefined as the table is: ", registeredMessagesPreviousHashes);
+    // put in DEBUG
+    // console.log("Should not return undefined as the table is: ", registeredMessagesPreviousHashes);
     return undefined;
 }
 
@@ -35,12 +38,14 @@ async function getCollidedMessages(chatId: string) {
 
     while (!collisionRootHash) {
         whatsappMessages = await fetchLastMessagesFront(chatId, { count: numMessagesToSearch });
-        console.log("Messages got from disagreement: ", whatsappMessages);
+        // put in DEBUG
+        // console.log("Messages got from disagreement: ", whatsappMessages);
         collisionRootHash = searchCollidedInBatch(whatsappMessages);
         if (numMessagesToSearch >= 30) throw new Error("Too many messages in collision. Aborting operation.");
         const normalChatMessages = whatsappMessages.filter((whatsappMessage) => whatsappMessage.metadata === undefined);
         if (normalChatMessages.length >= increaseSearchBy || whatsappMessages.length === 0) {
-            console.log("Searching out of secure chat without founding the disagreement root, waiting 200ms.");
+            // put in DEBUG
+            // console.log("Searching out of secure chat without founding the disagreement root, waiting 200ms.");
             await delay(200); // wait 200ms for next call
             continue;
         }
@@ -48,7 +53,8 @@ async function getCollidedMessages(chatId: string) {
         if (!collisionRootHash) numMessagesToSearch += (increaseSearchBy + nonAuditableChatMessages.length);
     }
 
-    console.log("Got out of loop, collisionRootHash is: ", collisionRootHash)
+    // put in DEBUG
+    // console.log("Got out of loop, collisionRootHash is: ", collisionRootHash)
     numMessagesToSearch += 1; // To account for collision message;
     whatsappMessages = await fetchLastMessagesFront(chatId, { count: numMessagesToSearch });
     const indexOfCollision = whatsappMessages
@@ -79,16 +85,11 @@ export class AuditableChatStateMachine {
         const userId = await AuditableChatStateMachine.getUserId();
         if (!userId) throw new Error("User number not found");
 
-        console.log("incomingMessage: ", incomingMessage);
         const metadataIsAck = incomingMessage.metadata?.kind === MetadataOptions.ACK;
-        console.log("Is ack: ", metadataIsAck);
         const metadataIsAuditable = incomingMessage.metadata?.kind === MetadataOptions.AUDITABLE;
-        console.log("Is auditableMessage: ", metadataIsAuditable);
         const metadataIsAgreeToDisagree = incomingMessage.metadata?.kind === MetadataOptions.AGREE_TO_DISAGREE;
-        console.log("Is agreeToDisagree: ", metadataIsAgreeToDisagree);
         const messageIsOfExpectedType = metadataIsAuditable || metadataIsAck || metadataIsAgreeToDisagree;
         const agreeToDisagreeAtempt = internalVariables?.agreeToDisagreeAtempt;
-        console.log("internal AtD: ", agreeToDisagreeAtempt)
 
         switch (auditableChat.getCurrentState()) {
             case AuditableChatStates.IDLE:
@@ -103,13 +104,16 @@ export class AuditableChatStateMachine {
                 break;
             case AuditableChatStates.REQUEST_SENT:
                 if (incomingMessage.content === AuditableControlMessage.ACCEPT) {
-                    console.log("Seed arrived: ", options?.seed)
+                    // put in DEBUG
+                    // console.log("Seed arrived: ", options?.seed)
                     if (!options?.seed) {
-                        console.error("Acceptation message: ", incomingMessage);
+                        // put in ERROR
+                        // console.error("Acceptation message: ", incomingMessage);
                         throw new Error("Seed not sent in acceptation message. 1");
                     }
                     if (!options?.publicKey) {
-                        console.error("Acceptation message: ", incomingMessage);
+                        // put in ERROR
+                        // console.error("Acceptation message: ", incomingMessage);
                         throw new Error("PublicKey not sent in acceptation message. 1");
                     }
                     const internalAuditableChatVariables = await AuditableChatStateMachine.assembleAuditableChatStart(options.seed, options.publicKey);
@@ -198,9 +202,11 @@ export class AuditableChatStateMachine {
 
                 const messageIsFromPartner = incomingMessage.author === incomingMessage.chatId;
                 if (metadataIsAuditable && messageIsFromPartner && !agreeToDisagreeAtempt) {
+                    logger.warn("Colision! Starting AtD Protocol.");
                     // 1. Aquire messages until the root of disagreement (should also change how the verifying is done, based on aquired messages)
                     const collidedMessages = await getCollidedMessages(chatId);
-                    console.log("CollisionMessages found: ", collidedMessages);
+                    logger.info("CollisionMessages found:");
+                    logger.info(collidedMessages);
                     const collisionMessage = collidedMessages[collidedMessages.length - 1];
                     // 2. Verify coeherence based on the root of disagreement (a bit slow now because rechecks for every new attempt)
                     const checkingMessagesCoherence = collidedMessages.map(async (auditableMessage, index) => {
@@ -246,7 +252,8 @@ export class AuditableChatStateMachine {
                     };
                     // 4. Store it on memory
                     if (!internalVariables) throw new Error("No internal variables found.");
-                    console.log("Trying to store on memory and send attempt");
+                    // put in DEBUG
+                    // console.log("Trying to store on memory and send attempt");
                     internalVariables.agreeToDisagreeAtempt = agreeToDisagreeMetadata;
                     // 5. Send this AtD attempt on chat
                     await chrome.runtime.sendMessage({
@@ -344,8 +351,9 @@ export class AuditableChatStateMachine {
                 }
                 if (!metadataIsAck) break;
                 const ack = incomingMessage.metadata as AckMetadata;
-                console.log("Ack received!", ack);
-                console.log("internal state: ", internalVariables);
+                // put in DEBUG
+                // console.log("Ack received!", ack);
+                // console.log("internal state: ", internalVariables);
                 const internalCounter = internalVariables?.counter;
                 if (!internalCounter) throw new Error("No internal counter present.");
                 const internalCounterOffset = 1;
@@ -364,7 +372,6 @@ export class AuditableChatStateMachine {
             internalAuditableChatVariables: internalVariables,
             currentState: auditableChat.getCurrentState(),
         };
-        console.log("State defined in transition: ", newChatState);
         await AuditableChatStateMachine.setAuditableChat(chatId, newChatState);
         return newChatState;
     }
@@ -407,7 +414,9 @@ export class AuditableChatStateMachine {
 
         const chatInternalState = chat.internalAuditableChatVariables;
         if (!chatInternalState) throw new Error("Chat has no internal state initialized.");
-        console.log("State before updating", chatInternalState);
+        // put in DEBUG
+        // console.log("State before updating", chatInternalState);
+        // console.log("Counter before updating", chatInternalState.counter);
 
         chatInternalState.counter += 1;
         chatInternalState.previousHash = newHashReference;
@@ -419,7 +428,8 @@ export class AuditableChatStateMachine {
     }
 
     static async setAuditableChat(chatId: string, state: ChatState): Promise<void> {
-        console.log("Trying to set new state: ", state);
+        // put in DEBUG
+        // console.log("Trying to set new state: ", state);
         const chats = await this.getAll();
         chats[chatId] = state;
         return new Promise((resolve) => {
